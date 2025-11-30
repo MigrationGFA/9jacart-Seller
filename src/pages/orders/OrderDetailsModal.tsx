@@ -73,7 +73,7 @@ export default function OrderDetailsModal({
                   <div key={idx} className="flex gap-4 items-start">
                     <div className="w-16 h-16 bg-gray-100 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center">
                       <img
-                        src={item.image || "/placeholder.png"}
+                        src={item.productImages[0] || "/placeholder.png"}
                         alt={item.productName}
                         className="w-full h-full object-cover opacity-80"
                         onError={(e) =>

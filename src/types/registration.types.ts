@@ -96,7 +96,7 @@ export interface RegistrationFieldErrors {
   storeName?: string;
   businessAddress?: string;
   businessRegNumber?: string;
-  taxIdNumber?: string;
+  // taxIdNumber?: string;
   idDocument?: string;
   businessRegCertificate?: string;
 }

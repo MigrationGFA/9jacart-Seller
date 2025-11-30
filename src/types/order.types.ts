@@ -2,10 +2,14 @@ export type OrderSort = "recent" | "oldest";
 
 export interface OrdersQuery {
   page: number;
-  perPage?: number;
+  perPage: number;
   status?: string;
-  search?: string;
-  sortBy?: OrderSort;
+  startDate?: string;
+  endDate?: string;
+  customerName?: string;
+  orderNo?: string;
+  paymentMethod?: string;
+  sortBy?: string; 
 }
 
 export interface Order {
