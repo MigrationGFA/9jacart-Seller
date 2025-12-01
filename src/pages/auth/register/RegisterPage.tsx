@@ -61,7 +61,7 @@ const FIELD_STEP_MAP: Record<keyof RegistrationFieldErrors, number> = {
   storeName: 3,
   businessAddress: 3,
   businessRegNumber: 3,
-  // taxIdNumber: 3,
+  taxIdNumber: 3,
   idDocument: 3,
   businessRegCertificate: 3,
 };

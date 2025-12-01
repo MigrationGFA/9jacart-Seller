@@ -24,9 +24,10 @@ export interface Order {
 
 export interface OrdersMetrics {
   totalOrders?: number;
-  delivered?: number;
-  returns?: number;
-  cancelled?: number;
+  deliveredOrders?: number;
+  returnedOrders?: number;
+  cancelledOrders?: number;
+  pendingOrders?: number;
 }
 
 export interface Pagination {

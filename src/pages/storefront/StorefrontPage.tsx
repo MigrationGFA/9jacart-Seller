@@ -2,14 +2,11 @@ import {
   Star,
   MapPin,
   CheckCircle,
-  Heart,
-  Eye,
   Search,
   ChevronDown,
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
-  ShoppingCart,
 } from "lucide-react";
 import ProductCard from "./ProductCard";
 

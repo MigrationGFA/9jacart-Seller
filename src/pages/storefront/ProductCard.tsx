@@ -1,5 +1,6 @@
 import { Eye, Heart, ShoppingCart, Star } from "lucide-react";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ProductCard = ({ product }: { product: any }) => {
   return (
     <div className="group flex flex-col gap-2">

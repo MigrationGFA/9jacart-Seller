@@ -1,11 +1,12 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { ordersService } from "@/services/order.service";
-import type { Order, OrderItem, OrdersQuery, Pagination } from "@/types";
+import type { Order, OrderItem, OrdersMetrics, OrdersQuery, Pagination } from "@/types";
 
 interface OrdersState {
   orders: Order[];
-  metrics: OrdersMetrics | null; // New state for metrics
+  metrics: OrdersMetrics | null; 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   orderItems: any[];
   pagination: Pagination | null;
   isLoading: boolean;
@@ -33,7 +34,7 @@ const initialState: OrdersState = {
     page: 1,
     perPage: 10,
     status: "all",
-    search: "",
+    // search: "",
     sortBy: "recent",
   },
 };
@@ -51,6 +52,7 @@ export const useOrdersStore = create<OrdersStore>()(
 
         const cleanQuery = Object.fromEntries(
           Object.entries(currentQuery).filter(
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             ([_, v]) => v !== undefined && v !== ""
           )
         );
@@ -62,7 +64,7 @@ export const useOrdersStore = create<OrdersStore>()(
         let paginationData: Pagination | null = null;
 
         if (response?.data) {
-          // Handle potential nested data structure
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const responseData = response as any;
           ordersData = Array.isArray(responseData.data)
             ? responseData.data
@@ -91,8 +93,10 @@ export const useOrdersStore = create<OrdersStore>()(
 
     fetchMetrics: async () => {
       try {
-        const response = await ordersService.getOrdersSummary();
-        set({ metrics: response.data });
+        const response = (await ordersService.getOrdersSummary()) as
+          | { data: OrdersMetrics }
+          | null;
+        set({ metrics: response?.data ?? null });
       } catch (error) {
         console.error("Failed to fetch metrics:", error);
       }

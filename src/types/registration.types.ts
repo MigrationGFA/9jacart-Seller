@@ -76,6 +76,7 @@ export interface RegistrationApiResponse {
   status: number;
   error: boolean;
   message: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data?: any;
 }
 
@@ -96,7 +97,7 @@ export interface RegistrationFieldErrors {
   storeName?: string;
   businessAddress?: string;
   businessRegNumber?: string;
-  // taxIdNumber?: string;
+  taxIdNumber?: string;
   idDocument?: string;
   businessRegCertificate?: string;
 }
