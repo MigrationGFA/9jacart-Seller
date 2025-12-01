@@ -114,7 +114,6 @@ export default function OrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query.orderNo, query.customerName, query.status]);
 
-  // UPDATE QUERY (Status & Search)
   useEffect(() => {
     const mappedStatus = status === "all" ? "" : status.toUpperCase();
     const cleanSearch = debouncedSearch.trim();
@@ -128,7 +127,6 @@ export default function OrdersPage() {
     });
   }, [debouncedSearch, status, setQuery]);
 
-  // TRIGGER API CALL (Fetch Orders)
   useEffect(() => {
     const payload = {
       page: query.page,
@@ -136,7 +134,6 @@ export default function OrdersPage() {
       status: query.status,
       customerName: query.customerName,
       orderNo: query.orderNo,
-      // New parameters
       startDate: query.startDate,
       endDate: query.endDate,
       paymentMethod: query.paymentMethod,
@@ -156,14 +153,12 @@ export default function OrdersPage() {
     fetchOrders,
   ]);
 
-  // NEW: TRIGGER METRICS FETCH ON MOUNT
   useEffect(() => {
     if (fetchMetrics) {
       fetchMetrics();
     }
   }, [fetchMetrics]);
 
-  // -- Handlers --
 
   const handleApplyFilter = () => {
     setQuery({
@@ -216,7 +211,6 @@ export default function OrdersPage() {
         Organize all ordered products
       </p>
 
-      {/* Metrics - Now using the 'metrics' state from the store */}
       <div className="grid grid-cols-4 gap-4 mb-8">
         <MetricCard
           icon={OrdersIcon}

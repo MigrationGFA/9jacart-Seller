@@ -1,20 +1,18 @@
 import { Eye, Heart, ShoppingCart, Star } from "lucide-react";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ProductCard = ({ product }: { product: any }) => {
   return (
     <div className="group flex flex-col gap-2">
       {/* Image Container */}
       <div className="relative aspect-square bg-[#F5F5F5] rounded-md overflow-hidden flex items-center justify-center p-4">
         <img
-          src={product.image}
-          alt={product.name}
+          src={product.productImages[0] || "/placeholder.png"}
+          alt={product.productName}
           className="w-full h-full object-contain mix-blend-multiply transition-transform duration-300 group-hover:scale-105"
           onError={(e) => {
-            // Fallback if generic URLs fail
-            e.currentTarget.src =
-              "https://via.placeholder.com/300?text=" +
-              encodeURIComponent(product.name);
+            e.currentTarget.src = `https://via.placeholder.com/300?text=${encodeURIComponent(
+              product.productName || product.name || "Product"
+            )}`;
           }}
         />
 
@@ -24,14 +22,21 @@ const ProductCard = ({ product }: { product: any }) => {
             New
           </span>
         )}
-        {product.originalPrice && (
+        {/* Calculate discount if originalPrice exists */}
+        {product.originalPrice && product.originalPrice > product.price && (
           <span className="absolute top-3 left-3 bg-[#DB4444] text-white text-[10px] font-bold px-2 py-1 rounded-sm">
-            -40%
+            -
+            {Math.round(
+              ((product.originalPrice - product.price) /
+                product.originalPrice) *
+                100
+            )}
+            %
           </span>
         )}
 
         {/* Action Buttons */}
-        <div className="absolute top-3 right-3 flex flex-col gap-2">
+        <div className="absolute top-3 right-3 flex flex-col gap-2 translate-x-10 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-300">
           <button className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm hover:bg-gray-100 transition-colors">
             <Heart className="w-4 h-4 text-black" />
           </button>
@@ -50,13 +55,15 @@ const ProductCard = ({ product }: { product: any }) => {
       {/* Details */}
       <div className="flex flex-col gap-1">
         <h3 className="font-medium text-black text-sm truncate">
-          {product.name}
+          {product.productName || product.name}
         </h3>
         <div className="flex items-center gap-3 text-sm">
-          <span className="text-[#DB4444] font-medium">${product.price}</span>
+          <span className="text-[#DB4444] font-medium">
+            ₦{product.currentPrice?.toLocaleString()}
+          </span>
           {product.originalPrice && (
             <span className="text-gray-400 line-through">
-              ${product.originalPrice}
+              ₦{product.originalPrice?.toLocaleString()}
             </span>
           )}
         </div>
@@ -66,31 +73,20 @@ const ProductCard = ({ product }: { product: any }) => {
               <Star
                 key={i}
                 className={`w-3 h-3 ${
-                  i < Math.floor(product.rating)
+                  i < Math.floor(product.rating || 0)
                     ? "fill-current"
                     : "text-gray-300"
                 }`}
               />
             ))}
           </div>
-          <span className="text-xs text-gray-500">({product.reviews})</span>
+          <span className="text-xs text-gray-500">
+            ({product.reviews || 0})
+          </span>
         </div>
-
-        {/* Color Swatches */}
-        {product.colors && product.colors.length > 0 && (
-          <div className="flex gap-1.5 mt-1">
-            {product.colors.map((color: string, idx: number) => (
-              <div
-                key={idx}
-                className={`w-4 h-4 rounded-full border border-gray-300 cursor-pointer hover:scale-110 transition-transform`}
-                style={{ backgroundColor: color }}
-              />
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
 };
 
-export default ProductCard;
+export default ProductCard
