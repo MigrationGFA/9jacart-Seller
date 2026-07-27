@@ -1,14 +1,21 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { popup } from '@/lib/popup';
-import { Eye, EyeOff, X, Ban } from 'lucide-react';
+import { Eye, EyeOff, X, Ban, CreditCard, Banknote, CircleSlash } from 'lucide-react';
 import { useBusinessCategories } from '@/hooks/useBusinessCategories';
 import { registrationService, RegistrationError } from '@/services/registration.service';
 import { LoadingButton } from '@/components/ui/LoadingSpinner';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { DocumentUpload } from '@/components/ui/DocumentUpload';
 import { fetchBanks, searchBanks, type Bank } from '@/lib/banks.data';
-import type { CompleteRegistrationData, RegistrationFieldErrors } from '@/types';
+import { environment } from '@/config/environment';
+import { VENDOR_REGISTRATION_FEE_NAIRA } from '@/lib/constants';
+import { openPaystackPopup } from '@/lib/paystack';
+import type {
+  CompleteRegistrationData,
+  RegistrationFieldErrors,
+  VendorRegistrationPaymentMethod,
+} from '@/types';
 
 interface FormData {
   // Step 1: Account Info
@@ -119,7 +126,36 @@ const FIELD_STEP_MAP: Record<keyof RegistrationFieldErrors, number> = {
   taxIdNumber: 4,
   idDocument: 4,
   businessRegCertificate: 4,
+  paymentMethod: 4,
 };
+
+const PAYMENT_OPTIONS: {
+  value: VendorRegistrationPaymentMethod;
+  label: string;
+  description: string;
+  icon: typeof CreditCard;
+}[] = [
+  {
+    value: 'Transfer/Card',
+    label: 'Transfer / Card',
+    description: 'Pay securely online with Paystack (card, bank transfer, USSD).',
+    icon: CreditCard,
+  },
+  {
+    value: 'Cash Payment',
+    label: 'Cash Payment',
+    description: 'Pay the registration fee in cash to the 9jacart team.',
+    icon: Banknote,
+  },
+  {
+    value: 'Not Paid',
+    label: 'Not Paid',
+    description: 'Continue without paying now. Payment can be completed later.',
+    icon: CircleSlash,
+  },
+];
+
+const TOTAL_STEPS = 4;
 
 const getFirstErrorStep = (errors: RegistrationFieldErrors): number | null => {
   const steps = Object.keys(errors).map((field) => FIELD_STEP_MAP[field as keyof RegistrationFieldErrors] ?? 4);
@@ -135,7 +171,9 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [isHoveringDialog, setIsHoveringDialog] = useState(false);
+  const [isHoveringPaymentDialog, setIsHoveringPaymentDialog] = useState(false);
   const [bankSuggestions, setBankSuggestions] = useState<Bank[]>([]);
   const [showBankSuggestions, setShowBankSuggestions] = useState(false);
   const [allBanks, setAllBanks] = useState<Bank[]>([]);
@@ -150,9 +188,16 @@ export default function RegisterPage() {
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
   const [otpVerificationId, setOtpVerificationId] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<VendorRegistrationPaymentMethod | null>(null);
+  const [isPaying, setIsPaying] = useState(false);
   
   const navigate = useNavigate();
   const { categories, isLoading: categoriesLoading, fetchCategories } = useBusinessCategories();
+  const formattedRegistrationFee = new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency: 'NGN',
+    minimumFractionDigits: 0,
+  }).format(VENDOR_REGISTRATION_FEE_NAIRA);
 
   // Load categories on component mount
   useEffect(() => {
@@ -351,9 +396,9 @@ export default function RegisterPage() {
     }
     
     if (step === 4) {
-      const isValid = !!(formData.storeName && formData.businessAddress && formData.businessState && formData.taxIdNumber && formData.idDocument && formData.businessRegCertificate);
+      const isValid = !!(formData.storeName && formData.businessAddress && formData.businessState);
       if (!isValid) {
-        popup.error('Please fill in all required fields and upload documents');
+        popup.error('Please fill in all required fields');
       }
       return isValid;
     }
@@ -415,7 +460,7 @@ export default function RegisterPage() {
       return;
     }
 
-    // Continue to next step for steps 3 and 4
+    // Continue to next step for steps 3 → 4
     if (currentStep < 4) {
       setCurrentStep(prev => prev + 1);
       popup.success(`Step ${currentStep} completed!`);
@@ -541,19 +586,17 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validate all steps before final submission
+
     if (!validateStep(3)) {
       setCurrentStep(3);
       return;
     }
-    
+
     if (!validateStep(4)) {
       popup.error('Please complete all required fields');
       return;
     }
 
-    // Validate account number one more time before submission
     if (formData.accountNumber) {
       const accountNumberTrimmed = formData.accountNumber.trim();
       if (accountNumberTrimmed.length !== 10) {
@@ -570,39 +613,29 @@ export default function RegisterPage() {
       }
     }
 
-    // Validate required files
-    if (!formData.idDocument || !formData.businessRegCertificate) {
-      popup.error('Please upload both required documents');
-      return;
-    }
-
     const advancedErrors = validateAdvancedStep3Fields();
     if (Object.keys(advancedErrors).length > 0) {
       setFormErrors(prev => ({ ...prev, ...advancedErrors }));
-      setCurrentStep(getFirstErrorStep(advancedErrors) ?? 3);
-      popup.error('Please fix the highlighted fields before submitting.');
+      setCurrentStep(getFirstErrorStep(advancedErrors) ?? 4);
+      popup.error('Please fix the highlighted fields before continuing.');
       return;
     }
 
-    // Show confirmation dialog before submitting
     setShowConfirmDialog(true);
   };
 
-  const handleConfirmSubmit = async () => {
+  const handleConfirmAccountDetails = () => {
     setShowConfirmDialog(false);
+    setPaymentMethod(null);
+    setShowPaymentDialog(true);
+  };
+
+  const submitRegistration = async (selectedPaymentMethod: VendorRegistrationPaymentMethod) => {
     setIsLoading(true);
     setApiError(null);
     setFormErrors({});
 
-    // Validate required files (should already be validated, but TypeScript needs this)
-    if (!formData.idDocument || !formData.businessRegCertificate) {
-      popup.error('Please upload both required documents');
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      // Prepare complete registration data
       const registrationData: CompleteRegistrationData = {
         emailAddress: formData.emailAddress,
         password: formData.password,
@@ -620,38 +653,38 @@ export default function RegisterPage() {
         accountNumber: formData.accountNumber.trim(),
         settlementBank: formData.settlementBank,
         settlementBankName: formData.settlementBankName,
+        paymentMethod: selectedPaymentMethod,
       };
 
       console.log('🚀 Submitting registration with data:', {
         ...registrationData,
         idDocument: registrationData.idDocument ? `File: ${registrationData.idDocument.name}` : 'None',
-        businessRegCertificate: registrationData.businessRegCertificate ? `File: ${registrationData.businessRegCertificate.name}` : 'None',
+        businessRegCertificate: registrationData.businessRegCertificate
+          ? `File: ${registrationData.businessRegCertificate.name}`
+          : 'None',
       });
 
-      // Submit to API
       const result = await registrationService.submitCompleteRegistration(registrationData);
-      
+
       console.log('✅ Registration successful:', result);
 
-      // Success
+      setShowPaymentDialog(false);
       popup.success('Registration completed successfully!');
       navigate('/register/success');
     } catch (error) {
       console.error('❌ Registration failed:', error);
-      
+
       if (error instanceof RegistrationError) {
-        // Handle field-specific validation errors
         setFormErrors(error.fieldErrors);
         setApiError(error.message);
+        setShowPaymentDialog(false);
         const errorStep = getFirstErrorStep(error.fieldErrors);
         if (errorStep) {
           setCurrentStep(errorStep);
         } else {
-          // Default to step 4 if no specific error step found
           setCurrentStep(4);
         }
-        
-        // Show specific error message
+
         const errorCount = Object.keys(error.fieldErrors).length;
         if (errorCount > 0) {
           popup.error(`Please fix ${errorCount} error${errorCount > 1 ? 's' : ''} in the form`);
@@ -659,24 +692,85 @@ export default function RegisterPage() {
           popup.error(error.message);
         }
       } else {
-        // Handle general errors
         const errorMessage = error instanceof Error ? error.message : 'Registration failed';
         setApiError(errorMessage);
         popup.error(errorMessage);
       }
     } finally {
       setIsLoading(false);
+      setIsPaying(false);
     }
   };
 
+  const handlePaymentAndSubmit = async () => {
+    if (!paymentMethod) {
+      popup.error('Please select a payment method');
+      return;
+    }
+
+    if (paymentMethod === 'Transfer/Card') {
+      if (!environment.paystackPublicKey) {
+        popup.error('Paystack is not configured. Please contact support or choose another payment method.');
+        return;
+      }
+
+      setIsPaying(true);
+      try {
+        await openPaystackPopup({
+          key: environment.paystackPublicKey,
+          email: formData.emailAddress,
+          amount: Math.round(VENDOR_REGISTRATION_FEE_NAIRA * 100),
+          metadata: {
+            custom_fields: [
+              {
+                display_name: 'Registration Type',
+                variable_name: 'registration_type',
+                value: 'Vendor Registration Fee',
+              },
+              {
+                display_name: 'Business Name',
+                variable_name: 'business_name',
+                value: formData.businessName,
+              },
+            ],
+          },
+          onSuccess: () => {
+            popup.success('Payment successful!');
+          },
+          onCancel: () => {
+            setIsPaying(false);
+          },
+        });
+
+        await submitRegistration('Transfer/Card');
+      } catch (error) {
+        setIsPaying(false);
+        const message = error instanceof Error ? error.message : 'Payment failed';
+        if (message !== 'Payment was cancelled') {
+          popup.error(message);
+        } else {
+          popup.error('Payment was cancelled. Please try again or choose another method.');
+        }
+      }
+      return;
+    }
+
+    await submitRegistration(paymentMethod);
+  };
+
   const handleCancelDialog = () => {
+    if (isLoading || isPaying) return;
     setShowConfirmDialog(false);
-    setCurrentStep(3);
+  };
+
+  const handleCancelPaymentDialog = () => {
+    if (isLoading || isPaying) return;
+    setShowPaymentDialog(false);
   };
 
   const renderStepIndicator = () => (
     <div className="flex items-center justify-center mb-8">
-      {[1, 2, 3, 4].map((step) => (
+      {Array.from({ length: TOTAL_STEPS }, (_, index) => index + 1).map((step) => (
         <div key={step} className="flex items-center">
           <div
             className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
@@ -687,7 +781,7 @@ export default function RegisterPage() {
           >
             {step}
           </div>
-          {step < 4 && (
+          {step < TOTAL_STEPS && (
             <div
               className={`w-16 h-1 mx-2 ${
                 step < currentStep ? 'bg-primary' : 'bg-gray-200'
@@ -1219,7 +1313,8 @@ export default function RegisterPage() {
 
       <div>
         <label htmlFor="taxIdNumber" className="block text-sm font-medium text-gray-700 mb-2">
-          Tax Identification Number <span className="text-red-500">*</span>
+          Tax Identification Number{' '}
+          <span className="text-xs text-gray-500">(optional)</span>
         </label>
         <input
           id="taxIdNumber"
@@ -1267,7 +1362,6 @@ export default function RegisterPage() {
         file={formData.idDocument}
         onFileChange={(file) => updateFormData({ idDocument: file })}
         accept="image/*,.pdf"
-        required
         formError={formErrors.idDocument}
       />
 
@@ -1276,7 +1370,6 @@ export default function RegisterPage() {
         file={formData.businessRegCertificate}
         onFileChange={(file) => updateFormData({ businessRegCertificate: file })}
         accept="image/*,.pdf"
-        required
         formError={formErrors.businessRegCertificate}
       />
     </div>
@@ -1299,7 +1392,7 @@ export default function RegisterPage() {
             <button
               type="button"
               onClick={handleBack}
-              disabled={isLoading}
+              disabled={isLoading || isPaying}
               className="flex-1 py-3 px-4 border border-[#2ac12a] bg-white hover:bg-gray-50 text-gray-700 font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50"
             >
               Back
@@ -1319,10 +1412,9 @@ export default function RegisterPage() {
             <LoadingButton
               type="submit"
               isLoading={isLoading}
-              disabled={!formData.idDocument || !formData.businessRegCertificate}
               className="flex-1 py-3 px-4 bg-[#8DEB6E] hover:bg-[#8DEB6E]/90 disabled:bg-gray-300 disabled:cursor-not-allowed text-primary font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
             >
-              {isLoading ? "Submitting..." : "Complete Registration"}
+              Complete Registration
             </LoadingButton>
           )}
         </div>
@@ -1395,7 +1487,7 @@ export default function RegisterPage() {
             <button
               type="button"
               onClick={handleCancelDialog}
-              disabled={isLoading}
+              disabled={isLoading || isPaying}
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Close dialog"
             >
@@ -1435,19 +1527,130 @@ export default function RegisterPage() {
               <button
                 type="button"
                 onClick={handleCancelDialog}
-                disabled={isLoading}
+                disabled={isLoading || isPaying}
                 className="px-4 py-2 border border-[#2ac12a] rounded-md text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={handleConfirmSubmit}
-                disabled={isLoading}
+                onClick={handleConfirmAccountDetails}
+                disabled={isLoading || isPaying}
                 className="px-4 py-2 bg-[#8DEB6E] text-primary rounded-md hover:bg-[#8DEB6E]/90 transition-colors disabled:opacity-50"
               >
-                {isLoading ? 'Submitting...' : 'Yes'}
+                Yes
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Vendor Registration Fee Payment Modal */}
+      {showPaymentDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          onClick={(e) => {
+            if (!isHoveringPaymentDialog && e.target === e.currentTarget) {
+              handleCancelPaymentDialog();
+            }
+          }}
+        >
+          <div
+            className="bg-white rounded-lg w-full max-w-md p-6 shadow-2xl animate-in zoom-in-95 duration-200 relative max-h-[90vh] overflow-y-auto"
+            onMouseEnter={() => setIsHoveringPaymentDialog(true)}
+            onMouseLeave={() => setIsHoveringPaymentDialog(false)}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={handleCancelPaymentDialog}
+              disabled={isLoading || isPaying}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Close payment dialog"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h2 className="text-xl font-bold text-gray-900 mb-2 pr-8">
+              Vendor Registration Fee
+            </h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Choose how you would like to pay the vendor registration fee to complete your application.
+            </p>
+
+            <div className="rounded-lg border border-[#8DEB6E]/60 bg-[#f4fff0] px-4 py-4 mb-4">
+              <p className="text-sm font-medium text-gray-600">Amount due</p>
+              <p className="mt-1 text-2xl font-bold text-[#1E4700]">{formattedRegistrationFee}</p>
+            </div>
+
+            <div className="space-y-3 mb-6" role="radiogroup" aria-label="Payment method">
+              {PAYMENT_OPTIONS.map((option) => {
+                const Icon = option.icon;
+                const isSelected = paymentMethod === option.value;
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    disabled={isLoading || isPaying}
+                    onClick={() => setPaymentMethod(option.value)}
+                    className={`w-full text-left rounded-lg border px-4 py-3 transition-colors disabled:opacity-50 ${
+                      isSelected
+                        ? 'border-[#2ac12a] bg-[#f4fff0] ring-1 ring-[#2ac12a]'
+                        : 'border-gray-200 bg-white hover:border-[#8DEB6E]'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${
+                          isSelected ? 'bg-[#8DEB6E] text-primary' : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-gray-900">{option.label}</span>
+                          <span
+                            className={`h-4 w-4 rounded-full border ${
+                              isSelected ? 'border-[#2ac12a] bg-[#2ac12a]' : 'border-gray-300'
+                            }`}
+                          />
+                        </div>
+                        <p className="mt-1 text-sm text-gray-600">{option.description}</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={handleCancelPaymentDialog}
+                disabled={isLoading || isPaying}
+                className="px-4 py-2 border border-[#2ac12a] rounded-md text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <LoadingButton
+                type="button"
+                isLoading={isLoading || isPaying}
+                disabled={!paymentMethod}
+                onClick={handlePaymentAndSubmit}
+                className="px-4 py-2 bg-[#8DEB6E] text-primary rounded-md hover:bg-[#8DEB6E]/90 transition-colors disabled:opacity-50"
+              >
+                {isPaying
+                  ? 'Processing payment...'
+                  : isLoading
+                    ? 'Submitting...'
+                    : paymentMethod === 'Transfer/Card'
+                      ? 'Pay & Submit'
+                      : 'Submit'}
+              </LoadingButton>
             </div>
           </div>
         </div>

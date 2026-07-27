@@ -77,7 +77,12 @@ export function DocumentUpload({
   return (
     <div className={className}>
       <label className="block text-sm font-medium text-foreground mb-2">
-        {label} {required && <span className="text-red-500">*</span>}
+        {label}{' '}
+        {required ? (
+          <span className="text-red-500">*</span>
+        ) : (
+          <span className="text-xs text-gray-500 font-normal">(optional)</span>
+        )}
       </label>
       
       {!file ? (

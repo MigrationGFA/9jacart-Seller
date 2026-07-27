@@ -4,6 +4,8 @@ interface Environment {
   basicAuthPassword: string;
   basicAuthHeader: string;
   buyerAppUrl: string;
+  /** Paystack *public* key (pk_...) for Inline checkout — safe for the browser. Secret key stays on the backend. */
+  paystackPublicKey: string;
 }
 
 const validateEnvVar = (name: string, value: string | undefined): string => {
@@ -28,4 +30,5 @@ export const environment: Environment = {
     validateEnvVar('VITE_API_BASIC_AUTH_PASSWORD', import.meta.env.VITE_API_BASIC_AUTH_PASSWORD)
   ),
   buyerAppUrl: import.meta.env.VITE_BUYER_APP_URL || 'https://9jacart.ng',
+  paystackPublicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '',
 };

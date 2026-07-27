@@ -77,6 +77,9 @@ export const SESSION_TIMEOUT_MS = 60 * 60 * 1000; // 1 hour
 /** Default commission percentage - used when API does not provide commission. Replace with API value when available. */
 export const DEFAULT_COMMISSION_PERCENTAGE = 3.5;
 
+/** Display-only vendor registration fee (₦). Charging is handled by the backend / Paystack. */
+export const VENDOR_REGISTRATION_FEE_NAIRA = 1000;
+
 export const HTTP_STATUS = {
   OK: 200,
   CREATED: 201,

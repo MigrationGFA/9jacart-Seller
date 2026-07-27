@@ -19,21 +19,29 @@ export const createRegistrationFormData = (data: RegistrationStep3Data): FormDat
 
   console.log('🛠️ UTILS - Added basic fields to FormData');
 
-  // File uploads - try without custom filename first
-  formData.append('idDocument', data.idDocument);
-  formData.append('businessRegCertificate', data.businessRegCertificate);
+  // File uploads - optional
+  if (data.idDocument) {
+    formData.append('idDocument', data.idDocument);
+  }
+  if (data.businessRegCertificate) {
+    formData.append('businessRegCertificate', data.businessRegCertificate);
+  }
 
   console.log('🛠️ UTILS - Added files to FormData:', {
-    idDocument: {
-      name: data.idDocument.name,
-      size: data.idDocument.size,
-      type: data.idDocument.type
-    },
-    businessRegCertificate: {
-      name: data.businessRegCertificate.name,
-      size: data.businessRegCertificate.size,
-      type: data.businessRegCertificate.type
-    }
+    idDocument: data.idDocument
+      ? {
+          name: data.idDocument.name,
+          size: data.idDocument.size,
+          type: data.idDocument.type,
+        }
+      : null,
+    businessRegCertificate: data.businessRegCertificate
+      ? {
+          name: data.businessRegCertificate.name,
+          size: data.businessRegCertificate.size,
+          type: data.businessRegCertificate.type,
+        }
+      : null,
   });
 
   console.log('🛠️ UTILS - FormData created successfully');
@@ -65,7 +73,7 @@ export const validateRegistrationDocument = (file: File): string | null => {
 };
 
 /**
- * Validate both required documents
+ * Validate uploaded registration documents when present (both are optional).
  */
 export const validateRegistrationDocuments = (
   idDocument: File | null, 
@@ -73,18 +81,14 @@ export const validateRegistrationDocuments = (
 ): string[] => {
   const errors: string[] = [];
 
-  if (!idDocument) {
-    errors.push('ID document is required');
-  } else {
+  if (idDocument) {
     const idError = validateRegistrationDocument(idDocument);
     if (idError) {
       errors.push(`ID Document: ${idError}`);
     }
   }
 
-  if (!businessRegCertificate) {
-    errors.push('Business registration certificate is required');
-  } else {
+  if (businessRegCertificate) {
     const certError = validateRegistrationDocument(businessRegCertificate);
     if (certError) {
       errors.push(`Business Certificate: ${certError}`);

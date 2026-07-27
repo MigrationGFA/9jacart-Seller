@@ -194,8 +194,9 @@ export class RegistrationService {
       formData.append("businessAddress", data.businessAddress);
       formData.append("state", data.state);
       formData.append("taxIdNumber", data.taxIdNumber || "");
+      formData.append("paymentMethod", data.paymentMethod);
 
-      // Append files
+      // Append files (optional)
       if (data.idDocument) {
         formData.append("idDocument", data.idDocument);
       }
@@ -368,14 +369,8 @@ export class RegistrationService {
       errors.state = "State is required";
     }
 
-    // Document validation
-    if (!data.idDocument) {
-      errors.idDocument = "ID document is required";
-    }
-
-    if (!data.businessRegCertificate) {
-      errors.businessRegCertificate =
-        "Business registration certificate is required";
+    if (!data.paymentMethod?.trim()) {
+      errors.paymentMethod = "Please select a payment method";
     }
 
     return errors;

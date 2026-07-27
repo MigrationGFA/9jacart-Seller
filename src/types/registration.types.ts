@@ -19,9 +19,15 @@ export interface RegistrationStep3Data {
   businessAddress: string;
   state: string;
   taxIdNumber: string;
-  idDocument: File;
-  businessRegCertificate: File;
+  idDocument: File | null;
+  businessRegCertificate: File | null;
 }
+
+/** Values accepted by POST /vendor/signup `paymentMethod` */
+export type VendorRegistrationPaymentMethod =
+  | 'Transfer/Card'
+  | 'Cash Payment'
+  | 'Not Paid';
 
 export interface RegistrationFormData {
   // Step 1
@@ -75,9 +81,12 @@ export interface CompleteRegistrationData {
   state: string;
   taxIdNumber: string;
 
-  // Documents
-  idDocument: File;
-  businessRegCertificate: File;
+  // Documents (optional)
+  idDocument?: File | null;
+  businessRegCertificate?: File | null;
+
+  // Registration fee payment
+  paymentMethod: VendorRegistrationPaymentMethod;
 }
 
 export interface RegistrationApiResponse {
@@ -113,4 +122,5 @@ export interface RegistrationFieldErrors {
   taxIdNumber?: string;
   idDocument?: string;
   businessRegCertificate?: string;
+  paymentMethod?: string;
 }
