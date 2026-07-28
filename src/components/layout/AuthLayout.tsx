@@ -6,7 +6,9 @@ import Logo from "@/assets/logo.png";
 
 const AuthLayout: React.FC = () => {
   const location = useLocation();
-  const isSuccessPage = location.pathname === "/register/success";
+  const isSuccessPage =
+    location.pathname === "/register/success" ||
+    location.pathname === "/register/payment-callback";
 
   return (
     <div className="min-h-screen flex overflow-hidden bg-white">

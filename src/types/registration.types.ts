@@ -87,6 +87,9 @@ export interface CompleteRegistrationData {
 
   // Registration fee payment
   paymentMethod: VendorRegistrationPaymentMethod;
+
+  /** Frontend URL Paystack / backend should return to after Transfer/Card payment */
+  callbackUrl?: string;
 }
 
 export interface RegistrationApiResponse {

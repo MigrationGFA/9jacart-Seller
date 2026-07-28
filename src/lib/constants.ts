@@ -78,7 +78,7 @@ export const SESSION_TIMEOUT_MS = 60 * 60 * 1000; // 1 hour
 export const DEFAULT_COMMISSION_PERCENTAGE = 3.5;
 
 /** Display-only vendor registration fee (₦). Charging is handled by the backend / Paystack. */
-export const VENDOR_REGISTRATION_FEE_NAIRA = 1000;
+export const VENDOR_REGISTRATION_FEE_NAIRA = 3000;
 
 export const HTTP_STATUS = {
   OK: 200,

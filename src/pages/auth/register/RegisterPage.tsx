@@ -8,9 +8,8 @@ import { LoadingButton } from '@/components/ui/LoadingSpinner';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { DocumentUpload } from '@/components/ui/DocumentUpload';
 import { fetchBanks, searchBanks, type Bank } from '@/lib/banks.data';
-import { environment } from '@/config/environment';
 import { VENDOR_REGISTRATION_FEE_NAIRA } from '@/lib/constants';
-import { openPaystackPopup } from '@/lib/paystack';
+import { extractPaystackCheckoutUrl } from '@/lib/paystack-response';
 import type {
   CompleteRegistrationData,
   RegistrationFieldErrors,
@@ -654,6 +653,10 @@ export default function RegisterPage() {
         settlementBank: formData.settlementBank,
         settlementBankName: formData.settlementBankName,
         paymentMethod: selectedPaymentMethod,
+        callbackUrl:
+          selectedPaymentMethod === 'Transfer/Card'
+            ? `${window.location.origin}/register/success`
+            : undefined,
       };
 
       console.log('🚀 Submitting registration with data:', {
@@ -667,6 +670,17 @@ export default function RegisterPage() {
       const result = await registrationService.submitCompleteRegistration(registrationData);
 
       console.log('✅ Registration successful:', result);
+
+      // Backend-initialized Paystack: redirect to checkout if a URL is returned.
+      if (selectedPaymentMethod === 'Transfer/Card') {
+        const checkoutUrl = extractPaystackCheckoutUrl(result);
+        if (checkoutUrl) {
+          setShowPaymentDialog(false);
+          popup.success('Redirecting to Paystack to complete payment...');
+          window.location.assign(checkoutUrl);
+          return;
+        }
+      }
 
       setShowPaymentDialog(false);
       popup.success('Registration completed successfully!');
@@ -708,53 +722,11 @@ export default function RegisterPage() {
       return;
     }
 
+    // All methods (including Transfer/Card) go through backend signup.
+    // Paystack checkout is started by the API when paymentMethod is Transfer/Card.
     if (paymentMethod === 'Transfer/Card') {
-      if (!environment.paystackPublicKey) {
-        popup.error('Paystack is not configured. Please contact support or choose another payment method.');
-        return;
-      }
-
       setIsPaying(true);
-      try {
-        await openPaystackPopup({
-          key: environment.paystackPublicKey,
-          email: formData.emailAddress,
-          amount: Math.round(VENDOR_REGISTRATION_FEE_NAIRA * 100),
-          metadata: {
-            custom_fields: [
-              {
-                display_name: 'Registration Type',
-                variable_name: 'registration_type',
-                value: 'Vendor Registration Fee',
-              },
-              {
-                display_name: 'Business Name',
-                variable_name: 'business_name',
-                value: formData.businessName,
-              },
-            ],
-          },
-          onSuccess: () => {
-            popup.success('Payment successful!');
-          },
-          onCancel: () => {
-            setIsPaying(false);
-          },
-        });
-
-        await submitRegistration('Transfer/Card');
-      } catch (error) {
-        setIsPaying(false);
-        const message = error instanceof Error ? error.message : 'Payment failed';
-        if (message !== 'Payment was cancelled') {
-          popup.error(message);
-        } else {
-          popup.error('Payment was cancelled. Please try again or choose another method.');
-        }
-      }
-      return;
     }
-
     await submitRegistration(paymentMethod);
   };
 

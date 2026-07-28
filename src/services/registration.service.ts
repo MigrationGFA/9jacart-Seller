@@ -196,6 +196,13 @@ export class RegistrationService {
       formData.append("taxIdNumber", data.taxIdNumber || "");
       formData.append("paymentMethod", data.paymentMethod);
 
+      // Tell backend where to send the user after Paystack (Transfer/Card).
+      if (data.callbackUrl) {
+        formData.append("callback_url", data.callbackUrl);
+        formData.append("callbackUrl", data.callbackUrl);
+        formData.append("redirect_url", data.callbackUrl);
+      }
+
       // Append files (optional)
       if (data.idDocument) {
         formData.append("idDocument", data.idDocument);
