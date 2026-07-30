@@ -128,6 +128,40 @@ const FIELD_STEP_MAP: Record<keyof RegistrationFieldErrors, number> = {
   paymentMethod: 4,
 };
 
+const FIELD_DOM_IDS: Partial<Record<keyof RegistrationFieldErrors, string>> = {
+  emailAddress: 'emailAddress',
+  password: 'password',
+  confirmPassword: 'confirmPassword',
+  fullName: 'fullName',
+  phoneNumber: 'phoneNumber',
+  businessName: 'businessName',
+  businessCategory: 'businessCategory',
+  accountNumber: 'accountNumber',
+  bank: 'bank',
+  settlementBank: 'bank',
+  settlementBankName: 'bank',
+  storeName: 'storeName',
+  businessAddress: 'businessAddress',
+  state: 'businessState',
+  taxIdNumber: 'taxIdNumber',
+  businessRegNumber: 'businessRegNumber',
+};
+
+const RequiredAsterisk = () => (
+  <span className="text-red-500" aria-hidden="true">
+    *
+  </span>
+);
+
+const getFirstErrorField = (
+  errors: RegistrationFieldErrors
+): keyof RegistrationFieldErrors | null => {
+  const fields = Object.keys(errors) as (keyof RegistrationFieldErrors)[];
+  if (!fields.length) return null;
+  fields.sort((a, b) => (FIELD_STEP_MAP[a] ?? 99) - (FIELD_STEP_MAP[b] ?? 99));
+  return fields[0];
+};
+
 const PAYMENT_OPTIONS: {
   value: VendorRegistrationPaymentMethod;
   label: string;
@@ -148,7 +182,7 @@ const PAYMENT_OPTIONS: {
   },
   {
     value: 'Not Paid',
-    label: 'Not Paid',
+    label: 'Pay later',
     description: 'Continue without paying now. Payment can be completed later.',
     icon: CircleSlash,
   },
@@ -179,6 +213,7 @@ export default function RegisterPage() {
   const bankInputRef = useRef<HTMLInputElement>(null);
   const bankSuggestionsRef = useRef<HTMLDivElement>(null);
   const formContainerRef = useRef<HTMLDivElement>(null);
+  const pendingScrollFieldRef = useRef<string | null>(null);
   
   // OTP verification state
   const [otpCode, setOtpCode] = useState('');
@@ -222,8 +257,43 @@ export default function RegisterPage() {
     };
   }, []);
 
-  // Scroll to top when step changes
+  const scrollToFieldElement = (elementId: string) => {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (typeof (el as HTMLElement).focus === 'function') {
+      (el as HTMLElement).focus({ preventScroll: true });
+    }
+  };
+
+  const scrollToErrorFields = (errors: RegistrationFieldErrors) => {
+    const firstField = getFirstErrorField(errors);
+    if (!firstField) return;
+
+    const elementId = FIELD_DOM_IDS[firstField] ?? String(firstField);
+    const targetStep = FIELD_STEP_MAP[firstField] ?? currentStep;
+
+    if (targetStep !== currentStep) {
+      pendingScrollFieldRef.current = elementId;
+      setCurrentStep(targetStep);
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      setTimeout(() => scrollToFieldElement(elementId), 50);
+    });
+  };
+
+  // Scroll to top when step changes, or to a pending error field
   useEffect(() => {
+    const pendingFieldId = pendingScrollFieldRef.current;
+    if (pendingFieldId) {
+      pendingScrollFieldRef.current = null;
+      setTimeout(() => scrollToFieldElement(pendingFieldId), 100);
+      return;
+    }
+
     // Scroll window first
     window.scrollTo({ top: 0, behavior: 'smooth' });
     
@@ -261,7 +331,16 @@ export default function RegisterPage() {
       setApiError(null);
     }
 
-    const fieldsToClear = Object.keys(updates) as (keyof RegistrationFieldErrors)[];
+    // Map form field names to RegistrationFieldErrors keys where they differ
+    const errorFieldAliases: Partial<Record<keyof FormData, keyof RegistrationFieldErrors>> = {
+      businessState: 'state',
+    };
+
+    const fieldsToClear = Object.keys(updates).flatMap((field) => {
+      const formField = field as keyof FormData;
+      const errorField = errorFieldAliases[formField] ?? (formField as keyof RegistrationFieldErrors);
+      return [errorField];
+    });
     
     if (fieldsToClear.length) {
       setFormErrors(prev => {
@@ -310,31 +389,54 @@ export default function RegisterPage() {
   const validateStep = (step: number): boolean => {
     // Basic validation for UI flow - detailed validation handled by API
     if (step === 1) {
-      // Check if all fields are filled
-      if (!formData.emailAddress || !formData.password || !formData.confirmPassword) {
+      const errors: RegistrationFieldErrors = {};
+
+      if (!formData.emailAddress?.trim()) {
+        errors.emailAddress = 'Email is required';
+      }
+      if (!formData.password) {
+        errors.password = 'Password is required';
+      }
+      if (!formData.confirmPassword) {
+        errors.confirmPassword = 'Please confirm your password';
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setFormErrors((prev) => ({ ...prev, ...errors }));
         popup.error('Please fill in all required fields');
+        scrollToErrorFields(errors);
         return false;
       }
 
       // Validate email format
       if (!/\S+@\S+\.\S+/.test(formData.emailAddress)) {
-        setFormErrors({ emailAddress: 'Please enter a valid email address' });
+        const emailErrors: RegistrationFieldErrors = {
+          emailAddress: 'Please enter a valid email address',
+        };
+        setFormErrors((prev) => ({ ...prev, ...emailErrors }));
         popup.error('Please enter a valid email address');
+        scrollToErrorFields(emailErrors);
         return false;
       }
 
       // Validate password strength and requirements
       const passwordError = registrationService.validatePassword(formData.password);
       if (passwordError) {
-        setFormErrors({ password: passwordError });
+        const passwordErrors: RegistrationFieldErrors = { password: passwordError };
+        setFormErrors((prev) => ({ ...prev, ...passwordErrors }));
         popup.error(passwordError);
+        scrollToErrorFields(passwordErrors);
         return false;
       }
 
       // Check if passwords match
       if (formData.password !== formData.confirmPassword) {
-        setFormErrors({ confirmPassword: 'Passwords do not match' });
+        const confirmErrors: RegistrationFieldErrors = {
+          confirmPassword: 'Passwords do not match',
+        };
+        setFormErrors((prev) => ({ ...prev, ...confirmErrors }));
         popup.error('Passwords do not match');
+        scrollToErrorFields(confirmErrors);
         return false;
       }
 
@@ -357,10 +459,33 @@ export default function RegisterPage() {
     
     if (step === 3) {
       const errors: RegistrationFieldErrors = {};
-      
-      // Check if all required fields are filled
-      if (!formData.fullName || !formData.businessName || !formData.businessCategory || !formData.phoneNumber || !formData.accountNumber || !formData.bank || !formData.settlementBank) {
+
+      if (!formData.fullName?.trim()) {
+        errors.fullName = 'Full name is required';
+      }
+      if (!formData.businessName?.trim()) {
+        errors.businessName = 'Business name is required';
+      }
+      if (!formData.businessCategory) {
+        errors.businessCategory = 'Business category is required';
+      }
+      if (!formData.phoneNumber?.trim()) {
+        errors.phoneNumber = 'Phone number is required';
+      }
+      if (!formData.accountNumber?.trim()) {
+        errors.accountNumber = 'Account number is required';
+      }
+      if (!formData.bank?.trim()) {
+        errors.bank = 'Bank is required';
+      }
+      if (!formData.settlementBank?.trim()) {
+        errors.settlementBank = 'Please select a bank from the suggestions';
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setFormErrors((prev) => ({ ...prev, ...errors }));
         popup.error('Please fill in all required fields');
+        scrollToErrorFields(errors);
         return false;
       }
       
@@ -371,6 +496,7 @@ export default function RegisterPage() {
           errors.accountNumber = 'Account number must be exactly 10 digits';
           setFormErrors(prev => ({ ...prev, ...errors }));
           popup.error('Account number must be exactly 10 digits');
+          scrollToErrorFields(errors);
           return false;
         }
         // Check if it contains only digits
@@ -378,6 +504,7 @@ export default function RegisterPage() {
           errors.accountNumber = 'Account number must contain only digits';
           setFormErrors(prev => ({ ...prev, ...errors }));
           popup.error('Account number must contain only digits');
+          scrollToErrorFields(errors);
           return false;
         }
       }
@@ -395,11 +522,26 @@ export default function RegisterPage() {
     }
     
     if (step === 4) {
-      const isValid = !!(formData.storeName && formData.businessAddress && formData.businessState);
-      if (!isValid) {
-        popup.error('Please fill in all required fields');
+      const errors: RegistrationFieldErrors = {};
+
+      if (!formData.storeName?.trim()) {
+        errors.storeName = 'Store name is required';
       }
-      return isValid;
+      if (!formData.businessAddress?.trim()) {
+        errors.businessAddress = 'Business address is required';
+      }
+      if (!formData.businessState?.trim()) {
+        errors.state = 'State is required';
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setFormErrors((prev) => ({ ...prev, ...errors }));
+        popup.error('Please fill in all required fields');
+        scrollToErrorFields(errors);
+        return false;
+      }
+
+      return true;
     }
     
     return true;
@@ -586,28 +728,33 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Never open the account confirmation modal while the form has errors
     if (!validateStep(3)) {
-      setCurrentStep(3);
       return;
     }
 
     if (!validateStep(4)) {
-      popup.error('Please complete all required fields');
       return;
     }
 
     if (formData.accountNumber) {
       const accountNumberTrimmed = formData.accountNumber.trim();
       if (accountNumberTrimmed.length !== 10) {
-        setFormErrors(prev => ({ ...prev, accountNumber: 'Account number must be exactly 10 digits' }));
-        setCurrentStep(3);
+        const accountErrors: RegistrationFieldErrors = {
+          accountNumber: 'Account number must be exactly 10 digits',
+        };
+        setFormErrors(prev => ({ ...prev, ...accountErrors }));
         popup.error('Account number must be exactly 10 digits');
+        scrollToErrorFields(accountErrors);
         return;
       }
       if (!/^\d+$/.test(accountNumberTrimmed)) {
-        setFormErrors(prev => ({ ...prev, accountNumber: 'Account number must contain only digits' }));
-        setCurrentStep(3);
+        const accountErrors: RegistrationFieldErrors = {
+          accountNumber: 'Account number must contain only digits',
+        };
+        setFormErrors(prev => ({ ...prev, ...accountErrors }));
         popup.error('Account number must contain only digits');
+        scrollToErrorFields(accountErrors);
         return;
       }
     }
@@ -615,12 +762,32 @@ export default function RegisterPage() {
     const advancedErrors = validateAdvancedStep3Fields();
     if (Object.keys(advancedErrors).length > 0) {
       setFormErrors(prev => ({ ...prev, ...advancedErrors }));
-      setCurrentStep(getFirstErrorStep(advancedErrors) ?? 4);
       popup.error('Please fix the highlighted fields before continuing.');
+      scrollToErrorFields(advancedErrors);
       return;
     }
 
-    setShowConfirmDialog(true);
+    // Check phone uniqueness before opening the account confirmation modal
+    setIsLoading(true);
+    try {
+      const { available, message } = await registrationService.checkPhoneAvailability(
+        formData.phoneNumber.trim()
+      );
+
+      if (!available) {
+        const phoneErrors: RegistrationFieldErrors = {
+          phoneNumber: message || "You can't use an already existing phone number.",
+        };
+        setFormErrors((prev) => ({ ...prev, ...phoneErrors }));
+        popup.error(phoneErrors.phoneNumber!);
+        scrollToErrorFields(phoneErrors);
+        return;
+      }
+
+      setShowConfirmDialog(true);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleConfirmAccountDetails = () => {
@@ -694,7 +861,7 @@ export default function RegisterPage() {
         setShowPaymentDialog(false);
         const errorStep = getFirstErrorStep(error.fieldErrors);
         if (errorStep) {
-          setCurrentStep(errorStep);
+          scrollToErrorFields(error.fieldErrors);
         } else {
           setCurrentStep(4);
         }
@@ -778,7 +945,7 @@ export default function RegisterPage() {
 
       <div>
         <label htmlFor="emailAddress" className="block text-sm font-medium text-gray-700 mb-2">
-          Email address
+          Email address <RequiredAsterisk />
         </label>
         <input
           id="emailAddress"
@@ -800,7 +967,7 @@ export default function RegisterPage() {
 
       <div>
         <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-          Password
+          Password <RequiredAsterisk />
         </label>
         <div className="relative">
           <input
@@ -837,7 +1004,7 @@ export default function RegisterPage() {
 
       <div>
         <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
-          Confirm Password
+          Confirm Password <RequiredAsterisk />
         </label>
         <div className="relative">
           <input
@@ -923,7 +1090,7 @@ export default function RegisterPage() {
       {/* OTP Input */}
       <div>
         <label htmlFor="otpCode" className="block text-sm font-medium text-gray-700 mb-2">
-          Verification Code
+          Verification Code <RequiredAsterisk />
         </label>
         <input
           id="otpCode"
@@ -988,7 +1155,7 @@ export default function RegisterPage() {
 
       <div>
         <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-2">
-          Full Name
+          Full Name <RequiredAsterisk />
         </label>
         <input
           id="fullName"
@@ -1010,7 +1177,7 @@ export default function RegisterPage() {
 
       <div>
         <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-2">
-          Phone Number
+          Phone Number <RequiredAsterisk />
         </label>
         <input
           id="phoneNumber"
@@ -1035,7 +1202,7 @@ export default function RegisterPage() {
 
       <div>
         <label htmlFor="businessName" className="block text-sm font-medium text-gray-700 mb-2">
-          Business Name
+          Business Name <RequiredAsterisk />
         </label>
         <input
           id="businessName"
@@ -1057,7 +1224,7 @@ export default function RegisterPage() {
 
       <div>
         <label htmlFor="businessCategory" className="block text-sm font-medium text-gray-700 mb-2">
-          Business Category
+          Business Category <RequiredAsterisk />
         </label>
         {categoriesLoading ? (
           <div className="w-full px-4 py-3 border border-gray-300 rounded-md bg-gray-50 flex items-center">
@@ -1096,7 +1263,7 @@ export default function RegisterPage() {
         <div className="space-y-6">
           <div>
             <label htmlFor="accountNumber" className="block text-sm font-medium text-gray-700 mb-2">
-              Account Number
+              Account Number <RequiredAsterisk />
             </label>
             <input
               id="accountNumber"
@@ -1135,7 +1302,7 @@ export default function RegisterPage() {
 
           <div className="relative">
             <label htmlFor="bank" className="block text-sm font-medium text-gray-700 mb-2">
-              Bank Name
+              Bank Name <RequiredAsterisk />
             </label>
             <input
               ref={bankInputRef}
@@ -1214,7 +1381,8 @@ export default function RegisterPage() {
 
       <div>
         <label htmlFor="storeName" className="block text-sm font-medium text-gray-700 mb-2">
-          Store Name <span className="text-xs text-gray-500">(Public Name)</span>
+          Store Name <RequiredAsterisk />{' '}
+          <span className="text-xs text-gray-500">(Public Name)</span>
         </label>
         <input
           id="storeName"
@@ -1236,7 +1404,7 @@ export default function RegisterPage() {
 
       <div>
         <label htmlFor="businessAddress" className="block text-sm font-medium text-gray-700 mb-2">
-          Business Address
+          Business Address <RequiredAsterisk />
         </label>
         <textarea
           id="businessAddress"
@@ -1258,7 +1426,7 @@ export default function RegisterPage() {
 
       <div>
         <label htmlFor="businessState" className="block text-sm font-medium text-gray-700 mb-2">
-          State
+          State <RequiredAsterisk />
         </label>
         <select
           id="businessState"

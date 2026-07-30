@@ -169,6 +169,86 @@ export class RegistrationService {
   }
 
   /**
+   * Check if phone number is already registered via a lightweight signup probe.
+   * Uses a unique placeholder email so only the phone uniqueness response matters.
+   */
+  async checkPhoneAvailability(
+    phoneNumber: string
+  ): Promise<{ available: boolean; message?: string }> {
+    try {
+      const formData = new FormData();
+      formData.append(
+        "emailAddress",
+        `phone-check-${Date.now()}@availability.invalid`
+      );
+      formData.append("password", "TempCheck123!");
+      formData.append("fullName", "Phone Check");
+      formData.append("businessName", "Phone Check");
+      formData.append("businessCategory", "1");
+      formData.append("phoneNumber", phoneNumber);
+      formData.append("businessRegNumber", "");
+      formData.append("storeName", "Phone Check");
+      formData.append("businessAddress", "placeholder");
+      formData.append("state", "Lagos");
+      formData.append("taxIdNumber", "");
+
+      const response = await fetch(
+        `${environment.apiBaseUrl}${API_ENDPOINTS.REGISTRATION.SIGNUP}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: environment.basicAuthHeader,
+          },
+          body: formData,
+        }
+      );
+
+      let result: any = {};
+      try {
+        result = await response.json();
+      } catch (error) {
+        console.warn("Phone check could not parse response:", error);
+      }
+
+      if (!response.ok) {
+        const phoneError = result?.messages?.phoneNumber;
+        const phoneMessage = Array.isArray(phoneError)
+          ? phoneError.join(" ")
+          : String(phoneError || "");
+        const fallbackMessage = String(result?.message || "");
+
+        if (phoneMessage && /unique|already|exist/i.test(phoneMessage)) {
+          return {
+            available: false,
+            message: "You can't use an already existing phone number.",
+          };
+        }
+
+        // Some APIs only return a top-level message for duplicate phones
+        if (
+          !phoneMessage &&
+          /phone/i.test(fallbackMessage) &&
+          /unique|already|exist/i.test(fallbackMessage)
+        ) {
+          return {
+            available: false,
+            message: "You can't use an already existing phone number.",
+          };
+        }
+
+        // Any other validation error likely means phone is available.
+        return { available: true };
+      }
+
+      return { available: true };
+    } catch (error) {
+      console.error("Phone check error:", error);
+      // On network issues, allow flow to continue; final submission will fail if needed.
+      return { available: true };
+    }
+  }
+
+  /**
    * Complete registration with all data in single request
    * Simplified implementation based on working SignupTest.tsx
    */
