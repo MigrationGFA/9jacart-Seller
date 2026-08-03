@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { RegistrationStep3Data } from '@/types';
 
 
@@ -144,3 +145,58 @@ export const formatPhoneNumber = (phone: string): string => {
   // Otherwise, assume it's a local number and add +234
   return '+234' + cleaned;
 };
+
+
+// lib/validation/registration.schema.ts
+import { z } from 'zod';
+
+export const registrationSchema = z.object({
+  // Step 1: Account Info
+  emailAddress: z.string()
+    .min(1, 'Email is required')
+    .email('Please enter a valid email address'),
+  password: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number')
+    .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character'),
+  confirmPassword: z.string()
+    .min(1, 'Please confirm your password'),
+  
+  // Step 3: Personal & Business Info
+  fullName: z.string().min(1, 'Full name is required'),
+  businessName: z.string().min(1, 'Business name is required'),
+  businessCategory: z.string().min(1, 'Business category is required'),
+  businessCategoryId: z.number().min(1, 'Business category is required'),
+  phoneNumber: z.string()
+    .min(1, 'Phone number is required')
+    .regex(/^0[7-9][0-1]\d{8}$/, 'Enter a valid Nigerian phone number'),
+  accountNumber: z.string()
+    .length(10, 'Account number must be exactly 10 digits')
+    .regex(/^\d+$/, 'Account number must contain only digits'),
+  bank: z.string().min(1, 'Bank name is required'),
+  settlementBank: z.string().min(1, 'Settlement bank is required'),
+  settlementBankName: z.string().min(1, 'Bank name is required'),
+  
+  // Step 4: Business Details & Documents
+  storeName: z.string().min(1, 'Store name is required'),
+  businessAddress: z.string().min(1, 'Business address is required'),
+  taxIdNumber: z.string()
+    .min(1, 'Tax ID is required')
+    .regex(/^[0-9-]+$/, 'Tax ID can only include digits and hyphens')
+    .refine((val) => {
+      const digitsOnly = val.replace(/-/g, '');
+      return digitsOnly.length === 10 || digitsOnly.length === 14;
+    }, 'Tax ID must contain exactly 10 or 14 digits'),
+  businessRegNumber: z.string()
+    .optional()
+    .refine(
+      (val) => !val || /^RC-?\d{7}$/i.test(val),
+      'Use RC1234567 or RC-1234567 (7 digits after RC)'
+    ),
+  idDocument: z.instanceof(File, { message: 'ID document is required' }),
+  businessRegCertificate: z.instanceof(File, { message: 'Business registration certificate is required' }),
+});
+
+export type RegistrationFormData = z.infer<typeof registrationSchema>;
