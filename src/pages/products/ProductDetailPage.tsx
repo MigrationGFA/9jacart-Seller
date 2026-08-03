@@ -15,6 +15,22 @@ import {
 import { ProductImage } from "@/components/products/ProductImage";
 import { ProductImageUpload } from "@/components/products/ProductImageUpload";
 import { ProductDebugPanel } from "@/components/debug/ProductDebugPanel";
+import { DEFAULT_COMMISSION_PERCENTAGE } from "@/lib/constants";
+import { Layers } from "lucide-react";
+
+const WEIGHT_FEATURE_NAME = "Weight";
+
+const formatWeightDisplay = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  const numericWeight = Number(trimmed);
+  if (!Number.isNaN(numericWeight)) {
+    return `${numericWeight}kg`;
+  }
+
+  return trimmed;
+};
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -199,6 +215,24 @@ export default function ProductDetailPage() {
   const status = getProductStatus(product);
   const stockStatus = getStockStatus(product);
 
+  // Commission calculation (mirrors AddProductPage logic)
+  const commissionPercentage = DEFAULT_COMMISSION_PERCENTAGE;
+  const hasDiscount =
+    product.discountType !== "0" &&
+    parseFloat(product.discountValue ?? "0") > 0;
+  const priceForCommission = hasDiscount
+    ? parseFloat(product.discountPrice ?? product.unitPrice ?? "0")
+    : parseFloat(product.unitPrice ?? "0");
+  const commissionAmount = priceForCommission * (commissionPercentage / 100);
+  const customerPrice = priceForCommission + commissionAmount;
+  const weightFeature = product.productFeatures?.find(
+    (feature) => feature.name.trim().toLowerCase() === WEIGHT_FEATURE_NAME.toLowerCase()
+  );
+  const otherFeatures =
+    product.productFeatures?.filter(
+      (feature) => feature.name.trim().toLowerCase() !== WEIGHT_FEATURE_NAME.toLowerCase()
+    ) ?? [];
+
   return (
     <div className="space-y-6">
       {/* Breadcrumbs */}
@@ -327,17 +361,35 @@ export default function ProductDetailPage() {
             </h3>
             <div className="space-y-2">
               {product.discountType === "0" ? (
-                // No discount - show unit price as main price
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground font-medium">
-                    Price:
-                  </span>
-                  <span className="text-xl font-bold text-foreground">
-                    {formatPriceDisplay(product.unitPrice)}
-                  </span>
-                </div>
+                // No discount - show unit price, commission, and customer price
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground font-medium">
+                      Original Price:
+                    </span>
+                    <span className="text-lg font-semibold text-foreground">
+                      {formatPriceDisplay(product.unitPrice)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">
+                      Commission ({commissionPercentage}%):
+                    </span>
+                    <span className="text-sm text-orange-600">
+                      +₦{commissionAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center border-t pt-2">
+                    <span className="text-muted-foreground font-medium">
+                      Customer Price:
+                    </span>
+                    <span className="text-xl font-bold text-green-600">
+                      ₦{customerPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </>
               ) : (
-                // Has discount - show original price, discount, and final price
+                // Has discount - show original price, discount, discounted price, commission, and customer price
                 <>
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">
@@ -354,12 +406,28 @@ export default function ProductDetailPage() {
                       {product.discountValue}
                     </span>
                   </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">
+                      Price after discount:
+                    </span>
+                    <span className="text-base font-semibold text-foreground">
+                      {formatPriceDisplay(product.discountPrice)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">
+                      Commission ({commissionPercentage}%):
+                    </span>
+                    <span className="text-sm text-orange-600">
+                      +₦{commissionAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
                   <div className="flex justify-between items-center border-t pt-2">
                     <span className="text-muted-foreground font-medium">
-                      Final Price:
+                      Customer Price:
                     </span>
                     <span className="text-xl font-bold text-green-600">
-                      {formatPriceDisplay(product.discountPrice)}
+                      ₦{customerPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 </>
@@ -434,6 +502,70 @@ export default function ProductDetailPage() {
                       >
                         {tag}
                       </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Weight
+                </label>
+                <p className="text-foreground mt-1">
+                  {formatWeightDisplay(
+                    weightFeature?.value?.trim() || product.weightKg?.trim() || ""
+                  ) || "Not specified"}
+                </p>
+              </div>
+
+              {otherFeatures.length > 0 && (
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">
+                    Features
+                  </label>
+                  <div className="mt-2 space-y-1 text-sm">
+                    {otherFeatures.map((feature, index) => (
+                      <div
+                        key={index}
+                        className="flex justify-between gap-4 border-b border-border/60 pb-1 last:border-b-0"
+                      >
+                        <span className="text-muted-foreground">
+                          {feature.name}
+                        </span>
+                        <span className="text-foreground font-medium text-right">
+                          {feature.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {product.productVariations && product.productVariations.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Layers className="h-4 w-4 text-muted-foreground" />
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Product Variations
+                    </label>
+                  </div>
+                  <div className="space-y-3">
+                    {product.productVariations.map((variation, vIdx) => (
+                      <div key={vIdx} className="border border-border rounded-md p-3 bg-secondary/10">
+                        <p className="text-sm font-semibold text-foreground mb-2">
+                          {variation.name}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {variation.options.map((opt, oIdx) => (
+                            <span
+                              key={oIdx}
+                              className="px-2.5 py-1 bg-primary/10 text-primary text-sm rounded-md"
+                            >
+                              {opt}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>

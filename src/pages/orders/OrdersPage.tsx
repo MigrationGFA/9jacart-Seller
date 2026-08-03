@@ -58,7 +58,7 @@ export default function OrdersPage() {
     query.customerName || query.orderNo || ""
   );
   const [debouncedSearch, setDebouncedSearch] = useState(search);
-  const [status, setStatus] = useState(query.status ?? "all");
+  const [status, setStatus] = useState(query.status ? query.status.toLowerCase() : "all");
 
   const currentPage = query.page || 1;
   const totalPages = pagination?.totalPages || 1;
@@ -66,6 +66,7 @@ export default function OrdersPage() {
   // Refs for click-outside detection
   const sortRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
+  const lastFetchedQueryKey = useRef<string>("");
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -109,24 +110,46 @@ export default function OrdersPage() {
       setDebouncedSearch(storeSearch);
     }
 
-    const currentStatus = query.status || "all";
+    const currentStatus = query.status ? query.status.toLowerCase() : "all";
     if (currentStatus !== status) setStatus(currentStatus);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query.orderNo, query.customerName, query.status]);
 
+  // Only call setQuery when search/status differ from current query to avoid cascade
   useEffect(() => {
-    const mappedStatus = status === "all" ? "" : status.toUpperCase();
+    const mappedStatus = status === "all" ? undefined : status.toUpperCase();
     const cleanSearch = debouncedSearch.trim();
     const isOrderNo = cleanSearch.toUpperCase().startsWith("ORD");
+    const nextOrderNo = isOrderNo ? cleanSearch : "";
+    const nextCustomerName = !isOrderNo ? cleanSearch : "";
 
-    setQuery({
-      page: 1,
-      status: mappedStatus,
-      orderNo: isOrderNo ? cleanSearch : "",
-      customerName: !isOrderNo ? cleanSearch : "",
-    });
-  }, [debouncedSearch, status, setQuery]);
+    const currentOrderNo = query.orderNo || "";
+    const currentCustomerName = query.customerName || "";
+    const effectiveCurrentStatus = query.status;
 
+    if (
+      nextOrderNo !== currentOrderNo ||
+      nextCustomerName !== currentCustomerName ||
+      mappedStatus !== effectiveCurrentStatus
+    ) {
+      const next: Partial<typeof query> = {
+        page: 1,
+        orderNo: nextOrderNo,
+        customerName: nextCustomerName,
+      };
+
+      // Only include status when not "all" so backend sees unfiltered list.
+      if (mappedStatus !== undefined) {
+        next.status = mappedStatus;
+      } else {
+        next.status = undefined;
+      }
+
+      setQuery(next);
+    }
+  }, [debouncedSearch, status, setQuery, query.orderNo, query.customerName, query.status]);
+
+  // Fetch orders only when query actually changes (avoid duplicate calls from effect cascade)
   useEffect(() => {
     const payload = {
       page: query.page,
@@ -139,6 +162,9 @@ export default function OrdersPage() {
       paymentMethod: query.paymentMethod,
       sortBy: query.sortBy,
     };
+    const key = JSON.stringify(payload);
+    if (key === lastFetchedQueryKey.current) return;
+    lastFetchedQueryKey.current = key;
     fetchOrders(payload);
   }, [
     query.page,

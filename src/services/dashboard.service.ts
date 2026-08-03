@@ -103,47 +103,142 @@ const normalizeVendorProfile = (data: any): VendorProfile => {
 };
 
 export class DashboardService {
+  /** Deduplicate concurrent getDashboardSummary requests - prevents multiple identical API calls */
+  private dashboardSummaryInFlight: Promise<DashboardSummary> | null = null;
+
   async getDashboardSummary(): Promise<DashboardSummary> {
+    if (this.dashboardSummaryInFlight) {
+      return this.dashboardSummaryInFlight;
+    }
+
+    const promise = (async () => {
+      try {
+        const response = await apiClient.get<DashboardSummaryResponse>(
+          API_ENDPOINTS.VENDOR.DASHBOARD_SUMMARY,
+          { requiresAuth: true }
+        );
+
+        if (response.error || !response.data) {
+          throw new Error(
+            response.message || "Failed to fetch dashboard summary"
+          );
+        }
+
+        return normalizeDashboardSummary(response.data);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : "Failed to fetch dashboard summary";
+        throw new Error(errorMessage);
+      } finally {
+        this.dashboardSummaryInFlight = null;
+      }
+    })();
+
+    this.dashboardSummaryInFlight = promise;
+    return promise;
+  }
+
+  /** Deduplicate concurrent getVendorProfile requests */
+  private vendorProfileInFlight: Promise<VendorProfile> | null = null;
+
+  async getVendorProfile(): Promise<VendorProfile> {
+    if (this.vendorProfileInFlight) {
+      return this.vendorProfileInFlight;
+    }
+
+    const promise = (async () => {
+      try {
+        const response = await apiClient.get<VendorProfile>(
+          API_ENDPOINTS.VENDOR.PROFILE,
+          { requiresAuth: true }
+        );
+
+        if (response.error || !response.data) {
+          throw new Error(response.message || "Failed to fetch vendor profile");
+        }
+
+        return normalizeVendorProfile(response.data);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : "Failed to fetch vendor profile";
+        throw new Error(errorMessage);
+      } finally {
+        this.vendorProfileInFlight = null;
+      }
+    })();
+
+    this.vendorProfileInFlight = promise;
+    return promise;
+  }
+
+  /**
+   * Set security PIN for 2FA
+   * POST /vendor/profile/security-pin
+   * Expected request body: { securityPin: string } (6-digit PIN)
+   * Endpoint returns 200 with no response body on success
+   */
+  async setSecurityPin(securityPin: string): Promise<void> {
     try {
-      const response = await apiClient.get<DashboardSummaryResponse>(
-        API_ENDPOINTS.VENDOR.DASHBOARD_SUMMARY,
+      const response = await apiClient.post<void>(
+        API_ENDPOINTS.VENDOR.SECURITY_PIN,
+        { securityPin },
         { requiresAuth: true }
       );
 
-      if (response.error || !response.data) {
-        throw new Error(
-          response.message || "Failed to fetch dashboard summary"
-        );
+      if (response.error) {
+        throw new Error(response.message || "Failed to set security PIN");
       }
-
-      return normalizeDashboardSummary(response.data);
     } catch (error) {
       const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "Failed to fetch dashboard summary";
+        error instanceof Error ? error.message : "Failed to set security PIN";
       throw new Error(errorMessage);
     }
   }
 
-  async getVendorProfile(): Promise<VendorProfile> {
+  /**
+   * Enable 2FA — requires the user's security PIN as verification
+   * POST /vendor/profile/enable-2fa
+   */
+  async enable2FA(securityPin: string): Promise<void> {
     try {
-      const response = await apiClient.get<VendorProfile>(
-        API_ENDPOINTS.VENDOR.PROFILE,
+      const response = await apiClient.post<void>(
+        API_ENDPOINTS.VENDOR.ENABLE_2FA,
+        { securityPin },
         { requiresAuth: true }
       );
 
-      if (response.error || !response.data) {
-        throw new Error(response.message || "Failed to fetch vendor profile");
+      if (response.error) {
+        throw new Error(response.message || "Failed to enable 2FA");
       }
-
-      // Normalize the response to handle different API field names
-      return normalizeVendorProfile(response.data);
     } catch (error) {
       const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "Failed to fetch vendor profile";
+        error instanceof Error ? error.message : "Failed to enable 2FA";
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Disable 2FA — requires the user's security PIN as verification
+   * POST /vendor/profile/disable-2fa
+   */
+  async disable2FA(securityPin: string): Promise<void> {
+    try {
+      const response = await apiClient.post<void>(
+        API_ENDPOINTS.VENDOR.DISABLE_2FA,
+        { securityPin },
+        { requiresAuth: true }
+      );
+
+      if (response.error) {
+        throw new Error(response.message || "Failed to disable 2FA");
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to disable 2FA";
       throw new Error(errorMessage);
     }
   }
@@ -260,35 +355,42 @@ export class DashboardService {
   }
 
   /**
-   * Update account information (account name, account number, bank)
-   * TODO: Backend endpoint to be implemented - endpoint: /vendor/account-info
-   * Expected request body: { accountName?: string; accountNumber?: string; bank?: string; }
-   * Expected response: Updated VendorProfile or accountInfo object
+   * Update account information (account number, settlement bank)
+   * POST /vendor/profile/update-account-info
+   * Expected request body (matches registration & API docs):
+   * { accountNumber: string; settlementBank: string; settlementBankName: string; securityPin: string }
+   * securityPin is required for verification.
    */
   async updateAccountInfo(
     accountInfo: {
-      accountName?: string;
-      accountNumber?: string;
-      bank?: string;
+      accountNumber: string;
+      settlementBank: string;
+      settlementBankName: string;
+      securityPin: string;
     }
   ): Promise<VendorProfile> {
     try {
-      // TODO: Replace with actual endpoint once backend is ready
-      // For now, this will use the general profile update endpoint as a fallback
-      // Use PATCH instead of PUT for partial updates
-      const response = await apiClient.patch<VendorProfile>(
+      const payload = {
+        accountNumber: accountInfo.accountNumber,
+        settlementBank: accountInfo.settlementBank,
+        settlementBankName: accountInfo.settlementBankName,
+        securityPin: accountInfo.securityPin,
+      };
+
+      const response = await apiClient.post<void>(
         API_ENDPOINTS.VENDOR.UPDATE_ACCOUNT_INFO,
-        { accountInfo },
+        payload,
         { requiresAuth: true }
       );
 
-      if (response.error || !response.data) {
+      if (response.error) {
         throw new Error(
           response.message || "Failed to update account information"
         );
       }
 
-      return response.data;
+      // API doesn't return the updated profile, so fetch it separately.
+      return await this.getVendorProfile();
     } catch (error) {
       const errorMessage =
         error instanceof Error
@@ -360,12 +462,27 @@ export class DashboardService {
     }
   }
 
+  /** Deduplicate concurrent getLogo requests - prevents multiple identical API calls */
+  private logoInFlight: Promise<string | null> | null = null;
+
   /**
    * Get business logo
    * GET /vendor/get-logo
    * Expected response: { logo: string } or { data: { logo: string } }
    */
   async getLogo(): Promise<string | null> {
+    if (this.logoInFlight) {
+      return this.logoInFlight;
+    }
+
+    const promise = this.fetchLogoInternal();
+    this.logoInFlight = promise;
+    return promise.finally(() => {
+      this.logoInFlight = null;
+    });
+  }
+
+  private async fetchLogoInternal(): Promise<string | null> {
     try {
       // Get current user token
       const token = tokenStorage.get();

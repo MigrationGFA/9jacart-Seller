@@ -1,26 +1,51 @@
 import type { CreateProductRequest, CreateProductPayload, EditProductPayload } from '@/types';
 
 /**
+ * Extract the numeric kg value from the request's weightKg field (already a plain number string like "0.5").
+ */
+const extractWeightKg = (request: Partial<CreateProductRequest>): number | undefined => {
+  if (request.weightKg && request.weightKg.trim() !== "") {
+    const n = Number(request.weightKg.trim());
+    if (!Number.isNaN(n) && n > 0) return n;
+  }
+  return undefined;
+};
+
+/**
  * Convert CreateProductRequest to CreateProductPayload for JSON API
  */
 export const createProductPayload = (request: CreateProductRequest): CreateProductPayload => {
-  return {
+  const weightKg = extractWeightKg(request);
+
+  const payload: CreateProductPayload = {
     productName: request.productName,
-    productCategory: request.categoryId, // Send UUID string directly
+    productCategory: request.categoryId,
     unitPrice: parseFloat(request.unitPrice),
     discountType: request.discountType ? parseInt(request.discountType) : undefined,
     discountValue: request.discountValue ? parseFloat(request.discountValue) : undefined,
     productDescription: request.productDescription,
     stock: parseInt(request.stock),
     minStock: parseInt(request.minStock),
+    weightKg,
     tag: request.productTags,
   };
+
+  if (request.productVariations && request.productVariations.length > 0) {
+    payload.productVariations = request.productVariations;
+  }
+
+  if (request.productFeatures && request.productFeatures.length > 0) {
+    payload.productFeatures = request.productFeatures;
+  }
+
+  return payload;
 };
 
 /**
  * Convert UpdateProductRequest to EditProductPayload for JSON API
  */
 export const createEditProductPayload = (request: Partial<CreateProductRequest>): EditProductPayload => {
+  const weightKg = extractWeightKg(request);
   const payload: EditProductPayload = {};
 
   if (request.productName) payload.productName = request.productName;
@@ -31,7 +56,16 @@ export const createEditProductPayload = (request: Partial<CreateProductRequest>)
   if (request.productDescription) payload.productDescription = request.productDescription;
   if (request.stock) payload.stock = parseInt(request.stock);
   if (request.minStock) payload.minStock = parseInt(request.minStock);
+  if (weightKg !== undefined) payload.weightKg = weightKg;
   if (request.productTags) payload.tag = request.productTags;
+
+  if (request.productVariations && request.productVariations.length > 0) {
+    payload.productVariations = request.productVariations;
+  }
+
+  if (request.productFeatures && request.productFeatures.length > 0) {
+    payload.productFeatures = request.productFeatures;
+  }
 
   return payload;
 };

@@ -67,6 +67,7 @@ export default function App() {
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/register/success" element={<RegisterSuccess />} />
+            <Route path="/register/payment-callback" element={<RegisterSuccess />} />
           </Route>
 
           {/* Protected Dashboard Routes */}

@@ -1,7 +1,19 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useEffect } from 'react';
 import Logo from "@/assets/logo.png";
+import { popup } from '@/lib/popup';
 
 export default function RegisterSuccess() {
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    // Paystack often returns ?reference=...&trxref=... on the callback URL.
+    const reference = searchParams.get('reference') || searchParams.get('trxref');
+    if (reference) {
+      popup.success('Payment completed successfully!');
+    }
+  }, [searchParams]);
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-lg shadow-lg p-8">

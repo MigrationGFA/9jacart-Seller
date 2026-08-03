@@ -1,3 +1,13 @@
+export interface ProductVariation {
+  name: string;
+  options: string[];
+}
+
+export interface ProductFeature {
+  name: string;
+  value: string;
+}
+
 export interface Product {
   productId: string;
   productName: string;
@@ -11,12 +21,15 @@ export interface Product {
   discountPrice: string;
   stock: string;
   minStock: string;
+  weightKg?: string;
   images: string[];
   isActive: string | number | boolean;
   vendorId?: string;
   vendorStorefrontUrl?: string;
   createdAt: string;
   updatedAt: string;
+  productVariations?: ProductVariation[];
+  productFeatures?: ProductFeature[];
 }
 
 export interface ProductsApiResponse {
@@ -59,8 +72,11 @@ export interface CreateProductRequest {
   discountValue?: string;
   stock: string;
   minStock: string;
+  weightKg?: string;
   images: File[];
   isActive?: string;
+  productVariations?: ProductVariation[];
+  productFeatures?: ProductFeature[];
 }
 
 // New interface for JSON-only product creation (Step 1)
@@ -73,7 +89,10 @@ export interface CreateProductPayload {
   productDescription: string;
   stock: number;
   minStock: number;
+  weightKg?: number;
   tag: string[];
+  productVariations?: ProductVariation[];
+  productFeatures?: ProductFeature[];
 }
 
 // Interface for image upload (Step 2)
@@ -110,7 +129,10 @@ export interface EditProductPayload {
   productDescription?: string;
   stock?: number;
   minStock?: number;
+  weightKg?: number;
   tag?: string[];
+  productVariations?: ProductVariation[];
+  productFeatures?: ProductFeature[];
 }
 
 export interface ProductsState {

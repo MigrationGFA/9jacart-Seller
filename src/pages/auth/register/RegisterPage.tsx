@@ -6,6 +6,7 @@ import { registrationService, RegistrationError } from '@/services/registration.
 import { LoadingButton } from '@/components/ui/LoadingSpinner';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 
+
 export default function RegisterPage() {
   const {
     form,
@@ -18,7 +19,7 @@ export default function RegisterPage() {
     categories,
     categoriesLoading,
     validateStep,
-    goToNextStep,
+    // goToNextStep,
     goToPreviousStep,
     navigate,
   } = useRegistrationForm();
@@ -250,7 +251,6 @@ export default function RegisterPage() {
   );
 }
 
-
 // components/registration/ConfirmationDialog.tsx
 import { Ban, X } from 'lucide-react';
 import { useRegistrationForm } from './useRegistrationForm';
@@ -355,7 +355,6 @@ export const ConfirmationDialog = ({
     </div>
   );
 };
-
 
 // components/registration/StepIndicator.tsx
 interface StepIndicatorProps {

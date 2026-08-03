@@ -12,7 +12,43 @@ import { ImageUpload } from "@/components/ui/ImageUpload";
 import { TagsInput } from "@/components/ui/TagsInput";
 import { formatImageUrls } from "@/lib/image.utils";
 import { getProductStatus } from "@/lib/product.utils";
-import type { Product, UpdateProductRequest } from "@/types";
+import { DEFAULT_COMMISSION_PERCENTAGE } from "@/lib/constants";
+import type { Product, UpdateProductRequest, ProductVariation, ProductFeature } from "@/types";
+import { Plus, X, Layers } from "lucide-react";
+
+const WEIGHT_FEATURE_NAME = "Weight";
+
+const parseWeightToKgInputValue = (rawValue: string): string => {
+  const normalized = rawValue.trim().toLowerCase();
+  if (!normalized) return "";
+
+  const match = normalized.match(/^(\d+(\.\d+)?)\s*(kg|g)?$/);
+  if (!match) return "";
+
+  const numericWeight = Number(match[1]);
+  if (Number.isNaN(numericWeight) || numericWeight <= 0) return "";
+
+  if (match[3] === "g") {
+    return String(numericWeight / 1000);
+  }
+  return String(numericWeight);
+};
+
+const normalizeWeightForFeature = (rawValue: string): string => {
+  const trimmed = rawValue.trim();
+  if (!trimmed) return "";
+  const numericValue = Number(trimmed);
+  if (Number.isNaN(numericValue) || numericValue <= 0) return "";
+  return `${numericValue * 1000}g`;
+};
+
+const getWeightKgString = (rawValue: string): string | undefined => {
+  const trimmed = rawValue.trim();
+  if (!trimmed) return undefined;
+  const numericValue = Number(trimmed);
+  if (Number.isNaN(numericValue) || numericValue <= 0) return undefined;
+  return String(numericValue);
+};
 
 const normalizeIsActiveValue = (value: Product["isActive"]): string =>
   value === "1" || value === 1 || value === true ? "1" : "0";
@@ -72,6 +108,18 @@ export default function EditProductPage() {
   const [existingImages, setExistingImages] = useState<string[]>([]);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
 
+  // Product Variations state
+  const [hasVariations, setHasVariations] = useState(false);
+  const [productVariations, setProductVariations] = useState<ProductVariation[]>([]);
+  const [variationInputs, setVariationInputs] = useState<string[]>([]);
+
+  // Product Features state
+  const [productFeatures, setProductFeatures] = useState<ProductFeature[]>([
+    { name: WEIGHT_FEATURE_NAME, value: "" },
+  ]);
+
+  const PRODUCT_DESCRIPTION_MAX_LENGTH = 500;
+
   // Load product and categories on component mount
   useEffect(() => {
     if (id) {
@@ -104,8 +152,109 @@ export default function EditProductPage() {
       });
       // Store existing images separately
       setExistingImages(product.images || []);
+
+      // Restore variations state from saved product data
+      const savedVariations = product.productVariations ?? [];
+      if (savedVariations.length > 0) {
+        setHasVariations(true);
+        setProductVariations(savedVariations);
+        setVariationInputs(savedVariations.map(() => ""));
+      } else {
+        setHasVariations(false);
+        setProductVariations([]);
+        setVariationInputs([]);
+      }
+
+      // Restore features state from saved product data
+      const savedFeatures = product.productFeatures ?? [];
+      const savedWeightFeature = savedFeatures.find(
+        (feature) =>
+          feature.name.trim().toLowerCase() === WEIGHT_FEATURE_NAME.toLowerCase()
+      );
+      const otherFeatures = savedFeatures.filter(
+        (feature) =>
+          feature.name.trim().toLowerCase() !== WEIGHT_FEATURE_NAME.toLowerCase()
+      );
+      setProductFeatures([
+        {
+          name: WEIGHT_FEATURE_NAME,
+          value: parseWeightToKgInputValue(savedWeightFeature?.value ?? product.weightKg ?? ""),
+        },
+        ...otherFeatures,
+      ]);
     }
   }, [product]);
+
+  // ── Variation helpers ──────────────────────────────────────────────────────
+
+  const VARIATION_PRESETS = ["Size", "Color", "Measurement"];
+
+  const toggleVariations = () => {
+    setHasVariations((prev) => {
+      if (!prev && productVariations.length === 0) {
+        setProductVariations([{ name: "", options: [] }]);
+        setVariationInputs([""]);
+      }
+      return !prev;
+    });
+  };
+
+  const addVariation = () => {
+    setProductVariations((prev) => [...prev, { name: "", options: [] }]);
+    setVariationInputs((prev) => [...prev, ""]);
+  };
+
+  const removeVariation = (index: number) => {
+    setProductVariations((prev) => prev.filter((_, i) => i !== index));
+    setVariationInputs((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const updateVariationName = (index: number, name: string) => {
+    setProductVariations((prev) =>
+      prev.map((v, i) => (i === index ? { ...v, name } : v))
+    );
+  };
+
+  const addVariationOption = (index: number, option: string) => {
+    const trimmed = option.trim();
+    if (!trimmed) return;
+    setProductVariations((prev) =>
+      prev.map((v, i) => {
+        if (i !== index) return v;
+        if (v.options.includes(trimmed)) return v;
+        return { ...v, options: [...v.options, trimmed] };
+      })
+    );
+    setVariationInputs((prev) => prev.map((val, i) => (i === index ? "" : val)));
+  };
+
+  const removeVariationOption = (varIndex: number, optIndex: number) => {
+    setProductVariations((prev) =>
+      prev.map((v, i) =>
+        i === varIndex
+          ? { ...v, options: v.options.filter((_, oi) => oi !== optIndex) }
+          : v
+      )
+    );
+  };
+
+  const handleVariationInputKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    index: number
+  ) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addVariationOption(index, variationInputs[index] || "");
+    } else if (
+      e.key === "Backspace" &&
+      (variationInputs[index] || "") === "" &&
+      productVariations[index].options.length > 0
+    ) {
+      removeVariationOption(index, productVariations[index].options.length - 1);
+    }
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -156,6 +305,34 @@ export default function EditProductPage() {
       }
     }
 
+    // Validate product variations when enabled
+    if (hasVariations) {
+      const filledVariations = productVariations.filter(
+        (v) => v.name.trim() !== "" || v.options.length > 0
+      );
+      for (let i = 0; i < filledVariations.length; i++) {
+        const v = filledVariations[i];
+        if (!v.name.trim()) {
+          newErrors.variations = `Variation #${i + 1} must have a name`;
+          break;
+        }
+        if (v.options.length === 0) {
+          newErrors.variations = `Variation "${v.name}" must have at least one option`;
+          break;
+        }
+      }
+    }
+
+    const weightFeature = productFeatures.find(
+      (feature) => feature.name.trim().toLowerCase() === WEIGHT_FEATURE_NAME.toLowerCase()
+    );
+    const parsedWeight = Number(weightFeature?.value?.trim() || "");
+    if (!weightFeature || !weightFeature.value.trim()) {
+      newErrors.weightFeature = "Weight is required";
+    } else if (Number.isNaN(parsedWeight) || parsedWeight <= 0) {
+      newErrors.weightFeature = "Weight must be a valid number greater than 0";
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -176,6 +353,20 @@ export default function EditProductPage() {
     setIsUpdating(true);
 
     try {
+      const validatedVariations: ProductVariation[] = hasVariations
+        ? productVariations.filter((v) => v.name.trim() !== "" && v.options.length > 0)
+        : [];
+      // Raw weight input value (numeric, in kg)
+      const rawWeightInput = productFeatures.find(
+        (f) => f.name.trim().toLowerCase() === WEIGHT_FEATURE_NAME.toLowerCase()
+      )?.value ?? "";
+
+      const normalizedProductFeatures = productFeatures.map((feature) =>
+        feature.name.trim().toLowerCase() === WEIGHT_FEATURE_NAME.toLowerCase()
+          ? { ...feature, value: normalizeWeightForFeature(feature.value) }
+          : feature
+      );
+
       const productData: UpdateProductRequest = {
         productId: id,
         productName: form.productName,
@@ -183,13 +374,20 @@ export default function EditProductPage() {
         productDescription: form.productDescription,
         productTags: form.productTags,
         unitPrice: form.unitPrice,
-        discountType: form.discountType, // Always send discount type (0, 1, or 2)
+        discountType: form.discountType,
         discountValue: form.discountType === "0" ? undefined : form.discountValue,
         stock: form.stock,
         minStock: form.minStock,
-        images: [], // Images handled separately
+        weightKg: getWeightKgString(rawWeightInput),
+        images: [],
         isActive: form.isActive,
+        productVariations: validatedVariations.length > 0 ? validatedVariations : undefined,
+        productFeatures:
+          normalizedProductFeatures.length > 0 ? normalizedProductFeatures : undefined,
       };
+
+      console.log("📦 EDIT — weightKg being sent:", productData.weightKg);
+      console.log("📦 EDIT — productFeatures being sent:", JSON.stringify(productData.productFeatures));
 
       await updateProduct(productData);
       
@@ -295,8 +493,11 @@ export default function EditProductPage() {
     }
   };
 
-  // Calculate final price based on discount
-  const calculateFinalPrice = (): number => {
+  // Commission from API - uneditable. Uses DEFAULT_COMMISSION_PERCENTAGE until API provides value.
+  const commissionPercentage = DEFAULT_COMMISSION_PERCENTAGE;
+
+  // Calculate price after discount (before commission)
+  const calculatePriceAfterDiscount = (): number => {
     const unitPrice = parseFloat(form.unitPrice) || 0;
     const discountValue = parseFloat(form.discountValue) || 0;
     const discountType = form.discountType;
@@ -319,7 +520,10 @@ export default function EditProductPage() {
     return unitPrice;
   };
 
-  const finalPrice = calculateFinalPrice();
+  const priceAfterDiscount = calculatePriceAfterDiscount();
+  const commissionAmount = priceAfterDiscount * (commissionPercentage / 100);
+  // Customer price includes commission (mirrors AddProductPage logic)
+  const finalPrice = priceAfterDiscount + commissionAmount;
   const hasDiscount = form.discountType !== "0" && parseFloat(form.discountValue) > 0;
 
   // Loading state
@@ -495,16 +699,22 @@ export default function EditProductPage() {
                   <label className="block text-sm font-medium text-foreground mb-1">
                     Description *
                   </label>
-                  <textarea
-                    rows={4}
-                    value={form.productDescription}
-                    onChange={(e) =>
-                      updateForm("productDescription", e.target.value)
-                    }
-                    className="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
-                    placeholder="Describe your product"
-                    disabled={isUpdating || isSuspended}
-                  />
+                  <div className="relative">
+                    <textarea
+                      rows={4}
+                      value={form.productDescription}
+                      onChange={(e) =>
+                        updateForm("productDescription", e.target.value)
+                      }
+                      maxLength={PRODUCT_DESCRIPTION_MAX_LENGTH}
+                      className="w-full px-3 py-2 pr-16 pb-6 border border-border rounded-md bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                      placeholder="Describe your product"
+                      disabled={isUpdating || isSuspended}
+                    />
+                    <span className="pointer-events-none absolute bottom-1.5 right-3 text-xs text-muted-foreground">
+                      {form.productDescription.length}/{PRODUCT_DESCRIPTION_MAX_LENGTH}
+                    </span>
+                  </div>
                   {errors.productDescription && (
                     <ErrorMessage
                       message={errors.productDescription}
@@ -520,7 +730,7 @@ export default function EditProductPage() {
               <h2 className="text-lg font-semibold text-foreground mb-4">
                 Pricing
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
                     Unit Price (₦) *
@@ -555,6 +765,19 @@ export default function EditProductPage() {
                     <option value="2">Fixed Amount (₦)</option>
                   </select>
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Commission
+                  </label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={`${commissionPercentage}%`}
+                    className="w-full px-3 py-2 border border-border rounded-md bg-muted text-muted-foreground cursor-not-allowed"
+                    aria-label="Commission (from API)"
+                  />
+                </div>
               </div>
 
               {form.discountType !== "0" && (
@@ -586,7 +809,7 @@ export default function EditProductPage() {
                 </div>
               )}
 
-              {/* Final Price Display */}
+              {/* Customer Price Display */}
               {form.unitPrice && parseFloat(form.unitPrice) > 0 && (
                 <div className="mt-6 pt-4 border-t border-border">
                   <div className="flex justify-between items-center">
@@ -595,7 +818,7 @@ export default function EditProductPage() {
                         Customer Price
                       </label>
                       <p className="text-xs text-muted-foreground">
-                        {hasDiscount ? "What customers will pay" : "No discount applied"}
+                        What customers will pay (includes commission)
                       </p>
                     </div>
                     <div className="text-right">
@@ -609,16 +832,35 @@ export default function EditProductPage() {
                       )}
                     </div>
                   </div>
-                  
-                  {hasDiscount && (
-                    <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-md">
+
+                  {hasDiscount ? (
+                    <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-md space-y-2">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-orange-800 font-medium">
                           Discount amount:
                         </span>
                         <span className="text-orange-600 font-semibold">
-                          ₦{(parseFloat(form.unitPrice) - finalPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ₦{(parseFloat(form.unitPrice) - priceAfterDiscount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           {form.discountType === "1" && ` (${form.discountValue}%)`}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm pt-1 border-t border-orange-200">
+                        <span className="text-orange-800 font-medium">
+                          Commission (added to customer price):
+                        </span>
+                        <span className="text-orange-600 font-semibold">
+                          ₦{commissionAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({commissionPercentage}%)
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-md">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-orange-800 font-medium">
+                          Commission ({commissionPercentage}% added):
+                        </span>
+                        <span className="text-orange-600 font-semibold">
+                          ₦{commissionAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                     </div>
@@ -756,6 +998,286 @@ export default function EditProductPage() {
                 <ErrorMessage message={errors.productTags} className="mt-2" />
               )}
             </div>
+
+            {/* Product Features */}
+            <div className="bg-card border border-border rounded-lg p-6">
+              <h2 className="text-lg font-semibold text-foreground mb-4">
+                Product Features
+              </h2>
+              <p className="text-xs text-muted-foreground mb-3">
+                Edit key attributes like material, weight, or specs.
+              </p>
+
+              <div className="space-y-3">
+                {productFeatures.map((feature, index) => (
+                  <div
+                    key={index}
+                    className="grid grid-cols-1 md:grid-cols-5 gap-2 items-center"
+                  >
+                    {feature.name === WEIGHT_FEATURE_NAME ? (
+                      <div className="md:col-span-2 relative">
+                        <input
+                          type="text"
+                          value={feature.name}
+                          onChange={() => {}}
+                          placeholder="Feature name (e.g. Material)"
+                          className="w-full px-3 py-2 border border-border rounded-md bg-input text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                          disabled={isUpdating || isSuspended}
+                          readOnly
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-destructive font-bold text-sm">*</span>
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={feature.name}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setProductFeatures((prev) =>
+                            prev.map((f, i) =>
+                              i === index ? { ...f, name: value } : f
+                            )
+                          );
+                        }}
+                        placeholder="Feature name (e.g. Material)"
+                        className="md:col-span-2 px-3 py-2 border border-border rounded-md bg-input text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                        disabled={isUpdating || isSuspended}
+                      />
+                    )}
+                    {feature.name === WEIGHT_FEATURE_NAME ? (
+                      <div className="md:col-span-2 relative">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={feature.value}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setProductFeatures((prev) =>
+                              prev.map((f, i) =>
+                                i === index ? { ...f, value } : f
+                              )
+                            );
+                            if (errors.weightFeature) {
+                              setErrors((prev) => ({ ...prev, weightFeature: "" }));
+                            }
+                          }}
+                          placeholder="Enter weight"
+                          className="w-full px-3 py-2 pr-12 border border-border rounded-md bg-input text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                          disabled={isUpdating || isSuspended}
+                        />
+                        <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">
+                          kg
+                        </span>
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={feature.value}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setProductFeatures((prev) =>
+                            prev.map((f, i) =>
+                              i === index ? { ...f, value } : f
+                            )
+                          );
+                        }}
+                        placeholder="Value (e.g. Leather)"
+                        className="md:col-span-2 px-3 py-2 border border-border rounded-md bg-input text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                        disabled={isUpdating || isSuspended}
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setProductFeatures((prev) =>
+                          prev.filter((_, i) => i !== index)
+                        )
+                      }
+                      disabled={
+                        isUpdating ||
+                        isSuspended ||
+                        feature.name === WEIGHT_FEATURE_NAME
+                      }
+                      className="inline-flex items-center justify-center px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-md border border-border disabled:opacity-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                {errors.weightFeature && (
+                  <ErrorMessage message={errors.weightFeature} className="mt-1" />
+                )}
+                <p className="text-xs text-muted-foreground">Weight is in kilograms (kg).</p>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setProductFeatures((prev) => [
+                      ...prev,
+                      { name: "", value: "" },
+                    ])
+                  }
+                  disabled={isUpdating || isSuspended}
+                  className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add feature
+                </button>
+              </div>
+            </div>
+
+            {/* Product Variations */}
+            <div className="bg-card border border-border rounded-lg p-6">
+              <div className="flex items-start justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <Layers className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <h2 className="text-lg font-semibold text-foreground">
+                      Product Variations
+                    </h2>
+                    <p className="text-xs text-muted-foreground">
+                      e.g. Size, Color, Measurement
+                    </p>
+                  </div>
+                </div>
+                {/* Toggle switch */}
+                <button
+                  type="button"
+                  onClick={toggleVariations}
+                  disabled={isUpdating || isSuspended}
+                  aria-pressed={hasVariations}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${
+                    hasVariations ? "bg-[#8DEB6E]" : "bg-muted"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                      hasVariations ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {hasVariations && (
+                <div className="mt-4 space-y-4">
+                  {productVariations.map((variation, vIdx) => (
+                    <div
+                      key={vIdx}
+                      className="border border-border rounded-md p-4 space-y-3 bg-secondary/20"
+                    >
+                      {/* Variation header row */}
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={variation.name}
+                          onChange={(e) => updateVariationName(vIdx, e.target.value)}
+                          placeholder="Variation name (e.g. Size, Color)"
+                          disabled={isUpdating || isSuspended}
+                          className="flex-1 px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeVariation(vIdx)}
+                          disabled={isUpdating || isSuspended}
+                          className="p-1.5 rounded-md text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                          aria-label="Remove variation"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+
+                      {/* Preset name suggestions */}
+                      <div className="flex flex-wrap gap-2">
+                        {VARIATION_PRESETS.map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            disabled={isUpdating || isSuspended}
+                            onClick={() => updateVariationName(vIdx, preset)}
+                            className={`px-2.5 py-1 text-xs rounded-full border transition-colors disabled:opacity-50 ${
+                              variation.name === preset
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "border-border text-muted-foreground hover:border-primary hover:text-primary"
+                            }`}
+                          >
+                            {preset}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Options chip input */}
+                      <div>
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">
+                          Options{" "}
+                          <span className="text-muted-foreground/60">
+                            — press Enter or comma to add
+                          </span>
+                        </label>
+                        <div className="min-h-[42px] px-3 py-2 border border-border rounded-md bg-input focus-within:ring-2 focus-within:ring-ring">
+                          <div className="flex flex-wrap gap-2">
+                            {variation.options.map((opt, oIdx) => (
+                              <span
+                                key={oIdx}
+                                className="inline-flex items-center px-2 py-1 bg-primary/10 text-primary text-sm rounded-md"
+                              >
+                                {opt}
+                                <button
+                                  type="button"
+                                  onClick={() => removeVariationOption(vIdx, oIdx)}
+                                  disabled={isUpdating || isSuspended}
+                                  className="ml-1 text-primary/60 hover:text-primary focus:outline-none disabled:opacity-50"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                            <input
+                              type="text"
+                              value={variationInputs[vIdx] || ""}
+                              onChange={(e) =>
+                                setVariationInputs((prev) =>
+                                  prev.map((val, i) =>
+                                    i === vIdx ? e.target.value : val
+                                  )
+                                )
+                              }
+                              onKeyDown={(e) =>
+                                handleVariationInputKeyDown(e, vIdx)
+                              }
+                              onBlur={() =>
+                                addVariationOption(vIdx, variationInputs[vIdx] || "")
+                              }
+                              disabled={isUpdating || isSuspended}
+                              placeholder={
+                                variation.options.length === 0
+                                  ? "e.g. S, M, L or Red, Blue..."
+                                  : ""
+                              }
+                              className="flex-1 min-w-[160px] bg-transparent border-none outline-none text-foreground text-sm placeholder-muted-foreground disabled:opacity-50"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={addVariation}
+                    disabled={isUpdating || isSuspended}
+                    className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add another variation
+                  </button>
+
+                  {errors.variations && (
+                    <ErrorMessage message={errors.variations} className="mt-1" />
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Sidebar */}
@@ -884,6 +1406,12 @@ export default function EditProductPage() {
                       : form.discountType === "1"
                       ? `${form.discountValue}%`
                       : `₦${parseFloat(form.discountValue || "0").toLocaleString()}`}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Commission:</span>
+                  <span className="text-foreground">
+                    ₦{commissionAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({commissionPercentage}%)
                   </span>
                 </div>
               </div>

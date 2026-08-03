@@ -10,14 +10,18 @@ interface UseVendorProfileReturn {
   refreshProfile: () => Promise<void>;
   updateProfile: (profileData: Partial<VendorProfile>) => Promise<void>;
   updateAccountInfo: (accountInfo: {
-    accountName?: string;
-    accountNumber?: string;
-    bank?: string;
+    accountNumber: string;
+    settlementBank: string;
+    settlementBankName: string;
+    securityPin: string;
   }) => Promise<void>;
   changePassword: (params: {
     currentPassword: string;
     newPassword: string;
   }) => Promise<void>;
+  setSecurityPin: (securityPin: string) => Promise<void>;
+  enable2FA: (securityPin: string) => Promise<void>;
+  disable2FA: (securityPin: string) => Promise<void>;
 }
 
 export const useVendorProfile = (): UseVendorProfileReturn => {
@@ -63,9 +67,10 @@ export const useVendorProfile = (): UseVendorProfileReturn => {
   }, []);
 
   const updateAccountInfo = useCallback(async (accountInfo: {
-    accountName?: string;
-    accountNumber?: string;
-    bank?: string;
+    accountNumber: string;
+    settlementBank: string;
+    settlementBankName: string;
+    securityPin: string;
   }) => {
     setIsLoading(true);
     setError(null);
@@ -102,6 +107,45 @@ export const useVendorProfile = (): UseVendorProfileReturn => {
     }
   }, []);
 
+  const setSecurityPin = useCallback(async (securityPin: string) => {
+    setError(null);
+
+    try {
+      await dashboardService.setSecurityPin(securityPin);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to set security PIN';
+      setError(errorMessage);
+      console.error('Set security PIN error:', err);
+      throw err;
+    }
+  }, []);
+
+  const enable2FA = useCallback(async (securityPin: string) => {
+    setError(null);
+
+    try {
+      await dashboardService.enable2FA(securityPin);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to enable 2FA';
+      setError(errorMessage);
+      console.error('Enable 2FA error:', err);
+      throw err;
+    }
+  }, []);
+
+  const disable2FA = useCallback(async (securityPin: string) => {
+    setError(null);
+
+    try {
+      await dashboardService.disable2FA(securityPin);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to disable 2FA';
+      setError(errorMessage);
+      console.error('Disable 2FA error:', err);
+      throw err;
+    }
+  }, []);
+
   return {
     profile,
     isLoading,
@@ -111,5 +155,8 @@ export const useVendorProfile = (): UseVendorProfileReturn => {
     updateProfile,
     updateAccountInfo,
     changePassword,
+    setSecurityPin,
+    enable2FA,
+    disable2FA,
   };
 };

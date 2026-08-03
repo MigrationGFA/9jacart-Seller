@@ -17,10 +17,17 @@ export interface RegistrationStep3Data {
   businessRegNumber: string;
   storeName: string;
   businessAddress: string;
+  state: string;
   taxIdNumber: string;
-  idDocument: File;
-  businessRegCertificate: File;
+  idDocument: File | null;
+  businessRegCertificate: File | null;
 }
+
+/** Values accepted by POST /vendor/signup `paymentMethod` */
+export type VendorRegistrationPaymentMethod =
+  | 'Transfer/Card'
+  | 'Cash Payment'
+  | 'Not Paid';
 
 export interface RegistrationFormData {
   // Step 1
@@ -39,6 +46,7 @@ export interface RegistrationFormData {
   businessRegNumber: string;
   storeName: string;
   businessAddress: string;
+  state: string;
   taxIdNumber: string;
   idDocument: File | null;
   businessRegCertificate: File | null;
@@ -70,11 +78,18 @@ export interface CompleteRegistrationData {
   businessRegNumber: string;
   storeName: string;
   businessAddress: string;
+  state: string;
   taxIdNumber: string;
 
-  // Documents
-  idDocument: File;
-  businessRegCertificate: File;
+  // Documents (optional)
+  idDocument?: File | null;
+  businessRegCertificate?: File | null;
+
+  // Registration fee payment
+  paymentMethod: VendorRegistrationPaymentMethod;
+
+  /** Frontend URL Paystack / backend should return to after Transfer/Card payment */
+  callbackUrl?: string;
 }
 
 export interface RegistrationApiResponse {
@@ -105,8 +120,10 @@ export interface RegistrationFieldErrors {
   settlementBankName?: string;
   storeName?: string;
   businessAddress?: string;
+  state?: string;
   businessRegNumber?: string;
   taxIdNumber?: string;
   idDocument?: string;
   businessRegCertificate?: string;
+  paymentMethod?: string;
 }
