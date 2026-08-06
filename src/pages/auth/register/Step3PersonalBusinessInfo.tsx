@@ -34,7 +34,7 @@ export const Step3PersonalBusinessInfo = ({
 
   const {
     searchTerm,
-    setSearchTerm,
+    // setSearchTerm,
     suggestions,
     showSuggestions,
     setShowSuggestions,
@@ -44,7 +44,7 @@ export const Step3PersonalBusinessInfo = ({
     handleSelect,
   } = useBankSearch(handleBankSelect);
 
-  const accountNumber = watch('accountNumber');
+  // const accountNumber = watch('accountNumber');
 
   return (
     <div className="space-y-6">

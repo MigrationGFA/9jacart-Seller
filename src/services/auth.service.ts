@@ -150,7 +150,7 @@ export class AuthService {
         throw new Error(response.message || 'Failed to request password reset');
       }
 
-      return response as ForgotPasswordResponse;
+      return response as unknown as ForgotPasswordResponse;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Forgot password request failed';
       throw new Error(errorMessage);

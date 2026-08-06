@@ -39,7 +39,7 @@ export const useRegistrationForm = () => {
     mode: 'onChange',
   });
 
-  const { trigger, getValues, setValue, formState: { errors } } = form;
+  const { trigger, formState: { errors } } = form;
 
   // Load categories on mount
   useEffect(() => {

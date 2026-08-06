@@ -40,7 +40,7 @@ export default function RegisterPage() {
   const [isPaying, setIsPaying] = useState(false);
   const formContainerRef = useRef<HTMLDivElement>(null);
 
-  const { handleSubmit, watch, setValue, formState: { errors } } = form;
+  const { handleSubmit, watch, setValue } = form;
   const emailAddress = watch('emailAddress');
 
   // Single source of truth for OTP state — passed down to Step2, read here for the button guard.
