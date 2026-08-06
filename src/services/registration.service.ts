@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { environment } from "@/config/environment";
 import { API_ENDPOINTS } from "@/lib/constants";
 import type {

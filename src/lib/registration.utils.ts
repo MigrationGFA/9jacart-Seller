@@ -182,6 +182,7 @@ export const registrationSchema = z.object({
   bank: z.string().min(1, 'Bank name is required'),
   settlementBank: z.string().min(1, 'Settlement bank is required'),
   settlementBankName: z.string().min(1, 'Bank name is required'),
+  state: z.string().min(1, 'State is required'),
   
   // Step 4: Business Details & Documents
   storeName: z.string().min(1, 'Store name is required'),

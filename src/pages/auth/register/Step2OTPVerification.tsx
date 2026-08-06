@@ -5,25 +5,21 @@ import { useOTPVerification } from './useOTPVerification';
 interface Step2OTPVerificationProps {
   email: string;
   onVerified: () => void;
+  otp: ReturnType<typeof useOTPVerification>;
 }
 
-export const Step2OTPVerification = ({ email, onVerified }: Step2OTPVerificationProps) => {
+export const Step2OTPVerification = ({ email, onVerified, otp }: Step2OTPVerificationProps) => {
   const {
-    otpCode,
-    setOtpCode,
-    isOtpVerified,
-    isSendingOtp,
-    isVerifyingOtp,
-    otpError,
-    setOtpError,
-    sendOTP,
-    verifyOTP,
-  } = useOTPVerification(email);
+    otpCode, setOtpCode, isOtpVerified, isSendingOtp, isVerifyingOtp,
+    otpError, setOtpError, sendOTP, verifyOTP,
+  } = otp;
 
   const handleVerify = async () => {
-    await verifyOTP();
-    if (isOtpVerified) {
-      onVerified();
+    try {
+      await verifyOTP();
+      onVerified(); // only reached if verifyOTP didn't throw
+    } catch {
+      // error state/popup already handled inside verifyOTP
     }
   };
 

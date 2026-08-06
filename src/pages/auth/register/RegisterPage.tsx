@@ -1,11 +1,22 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // pages/RegisterPage.tsx
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Ban } from 'lucide-react';
 import { popup } from '@/lib/popup';
 import { registrationService, RegistrationError } from '@/services/registration.service';
+import { extractPaystackCheckoutUrl } from '@/lib/paystack-response';
 import { LoadingButton } from '@/components/ui/LoadingSpinner';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 
+import type { CompleteRegistrationData, VendorRegistrationPaymentMethod } from '@/types';
+import { useRegistrationForm } from './useRegistrationForm';
+import { useOTPVerification } from './useOTPVerification';
+import { Step1AccountInfo } from './Step1AccountInfo';
+import { Step2OTPVerification } from './Step2OTPVerification';
+import { Step3PersonalBusinessInfo } from './Step3PersonalBusinessInfo';
+import { Step4BusinessDetails } from './Step4BusinessDetails';
+import { PaymentDialog } from './PaymentDialog';
 
 export default function RegisterPage() {
   const {
@@ -19,18 +30,23 @@ export default function RegisterPage() {
     categories,
     categoriesLoading,
     validateStep,
-    // goToNextStep,
     goToPreviousStep,
     navigate,
   } = useRegistrationForm();
 
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<VendorRegistrationPaymentMethod | null>(null);
+  const [isPaying, setIsPaying] = useState(false);
   const formContainerRef = useRef<HTMLDivElement>(null);
 
   const { handleSubmit, watch, setValue, formState: { errors } } = form;
   const emailAddress = watch('emailAddress');
 
-  // Scroll to top when step changes
+  // Single source of truth for OTP state — passed down to Step2, read here for the button guard.
+  const otp = useOTPVerification(emailAddress);
+  const { isOtpVerified } = otp;
+
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     const scrollableParent = formContainerRef.current?.closest('.overflow-y-auto');
@@ -42,14 +58,12 @@ export default function RegisterPage() {
   }, [currentStep]);
 
   const handleNext = async () => {
-    // Step 1: Send OTP
     if (currentStep === 1) {
       const isValid = await validateStep(1);
       if (!isValid) return;
 
       setIsLoading(true);
       try {
-        // Check email availability
         const { available, message } = await registrationService.checkEmailAvailability(emailAddress);
         if (!available) {
           setValue('emailAddress', '');
@@ -57,8 +71,6 @@ export default function RegisterPage() {
           setIsLoading(false);
           return;
         }
-
-        // Move to OTP step
         setCurrentStep(2);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to send verification code';
@@ -69,30 +81,49 @@ export default function RegisterPage() {
       return;
     }
 
-    // Step 2: OTP verification handled by child component
     if (currentStep === 2) {
-      // OTP verification is handled in the Step2 component
+      // Handled by Step2OTPVerification's onVerified callback.
       return;
     }
 
-    // Validate and move to next step
     if (await validateStep(currentStep)) {
       setCurrentStep(prev => prev + 1);
     }
   };
 
   const handleSubmitForm = async (data: any) => {
-    // Validate all steps before final submission
     if (!(await validateStep(3)) || !(await validateStep(4))) {
       return;
     }
 
-    // Show confirmation dialog
-    setShowConfirmDialog(true);
+    // Phone uniqueness must be checked before showing the account confirmation modal.
+    setIsLoading(true);
+    try {
+      const { available, message } = await registrationService.checkPhoneAvailability(
+        data.phoneNumber.trim()
+      );
+
+      if (!available) {
+        popup.error(message || "You can't use an already existing phone number.");
+        return;
+      }
+
+      setShowConfirmDialog(true);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Could not verify phone number';
+      popup.error(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleConfirmSubmit = async () => {
+  const handleConfirmAccountDetails = () => {
     setShowConfirmDialog(false);
+    setPaymentMethod(null);
+    setShowPaymentDialog(true);
+  };
+
+  const submitRegistration = async (selectedPaymentMethod: VendorRegistrationPaymentMethod) => {
     setIsLoading(true);
     setApiError(null);
 
@@ -109,27 +140,44 @@ export default function RegisterPage() {
         businessRegNumber: formData.businessRegNumber || '',
         storeName: formData.storeName,
         businessAddress: formData.businessAddress,
+        state: formData.state,
         taxIdNumber: formData.taxIdNumber || '',
         idDocument: formData.idDocument as File,
         businessRegCertificate: formData.businessRegCertificate as File,
         accountNumber: formData.accountNumber.trim(),
         settlementBank: formData.settlementBank,
         settlementBankName: formData.settlementBankName,
+        paymentMethod: selectedPaymentMethod,
+        callbackUrl:
+          selectedPaymentMethod === 'Transfer/Card'
+            ? `${window.location.origin}/register/success`
+            : undefined,
       };
 
-      await registrationService.submitCompleteRegistration(registrationData);
+      const result = await registrationService.submitCompleteRegistration(registrationData);
+
+      if (selectedPaymentMethod === 'Transfer/Card') {
+        const checkoutUrl = extractPaystackCheckoutUrl(result);
+        if (checkoutUrl) {
+          setShowPaymentDialog(false);
+          popup.success('Redirecting to Paystack to complete payment...');
+          window.location.assign(checkoutUrl);
+          return;
+        }
+      }
+
+      setShowPaymentDialog(false);
       popup.success('Registration completed successfully!');
       navigate('/register/success');
     } catch (error) {
       console.error('Registration failed:', error);
-      
+
       if (error instanceof RegistrationError) {
-        // Set field errors
-        Object.entries(error.fieldErrors).forEach(([field, message]) => {
+        Object.entries(error.fieldErrors).forEach(([field]) => {
           setValue(field as any, '');
-          // Set error manually since we're using react-hook-form
         });
         setApiError(error.message);
+        setShowPaymentDialog(false);
         popup.error(error.message);
       } else {
         const errorMessage = error instanceof Error ? error.message : 'Registration failed';
@@ -138,11 +186,29 @@ export default function RegisterPage() {
       }
     } finally {
       setIsLoading(false);
+      setIsPaying(false);
     }
   };
 
+  const handlePaymentAndSubmit = async () => {
+    if (!paymentMethod) {
+      popup.error('Please select a payment method');
+      return;
+    }
+    if (paymentMethod === 'Transfer/Card') {
+      setIsPaying(true);
+    }
+    await submitRegistration(paymentMethod);
+  };
+
   const handleCancelDialog = () => {
+    if (isLoading) return;
     setShowConfirmDialog(false);
+  };
+
+  const handleCancelPaymentDialog = () => {
+    if (isLoading || isPaying) return;
+    setShowPaymentDialog(false);
   };
 
   const renderStepContent = () => {
@@ -151,14 +217,15 @@ export default function RegisterPage() {
         return <Step1AccountInfo form={form} isLoading={isLoading} />;
       case 2:
         return (
-          <Step2OTPVerification 
-            email={emailAddress} 
-            onVerified={() => setCurrentStep(3)} 
+          <Step2OTPVerification
+            email={emailAddress}
+            onVerified={() => setCurrentStep(3)}
+            otp={otp}
           />
         );
       case 3:
         return (
-          <Step3PersonalBusinessInfo 
+          <Step3PersonalBusinessInfo
             form={form}
             categories={categories}
             categoriesLoading={categoriesLoading}
@@ -175,9 +242,9 @@ export default function RegisterPage() {
   return (
     <div ref={formContainerRef} className="space-y-8">
       <StepIndicator currentStep={currentStep} totalSteps={4} />
-      
+
       {apiError && <ErrorMessage message={apiError} className="mb-4" />}
-      
+
       <form onSubmit={handleSubmit(handleSubmitForm)} className="space-y-8">
         {renderStepContent()}
 
@@ -192,12 +259,12 @@ export default function RegisterPage() {
               Back
             </button>
           )}
-          
+
           {currentStep < 4 ? (
             <button
               type="button"
               onClick={handleNext}
-              disabled={isLoading || currentStep === 2}
+              disabled={isLoading || (currentStep === 2 && !isOtpVerified)}
               className="flex-1 py-3 px-4 bg-[#8DEB6E] hover:bg-[#8DEB6E]/90 text-primary font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50"
             >
               Continue
@@ -244,21 +311,57 @@ export default function RegisterPage() {
         accountNumber={watch('accountNumber')}
         bankName={watch('settlementBankName') || watch('bank')}
         settlementBank={watch('settlementBank')}
-        onConfirm={handleConfirmSubmit}
+        onConfirm={handleConfirmAccountDetails}
         onCancel={handleCancelDialog}
+      />
+
+      <PaymentDialog
+        isOpen={showPaymentDialog}
+        isLoading={isLoading}
+        isPaying={isPaying}
+        paymentMethod={paymentMethod}
+        onSelectMethod={setPaymentMethod}
+        onConfirm={handlePaymentAndSubmit}
+        onCancel={handleCancelPaymentDialog}
       />
     </div>
   );
 }
+// components/registration/StepIndicator.tsx
+interface StepIndicatorProps {
+  currentStep: number;
+  totalSteps: number;
+}
+
+export const StepIndicator = ({ currentStep, totalSteps }: StepIndicatorProps) => {
+  return (
+    <div className="flex items-center justify-center mb-8">
+      {Array.from({ length: totalSteps }, (_, i) => i + 1).map((step) => (
+        <div key={step} className="flex items-center">
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+              step <= currentStep
+                ? 'bg-[#8DEB6E] text-primary'
+                : 'bg-gray-200 text-gray-600'
+            }`}
+          >
+            {step}
+          </div>
+          {step < totalSteps && (
+            <div
+              className={`w-16 h-1 mx-2 ${
+                step < currentStep ? 'bg-primary' : 'bg-gray-200'
+              }`}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
 
 // components/registration/ConfirmationDialog.tsx
-import { Ban, X } from 'lucide-react';
-import { useRegistrationForm } from './useRegistrationForm';
-import type { CompleteRegistrationData } from '@/types';
-import { Step1AccountInfo } from './Step1AccountInfo';
-import { Step2OTPVerification } from './Step2OTPVerification';
-import { Step3PersonalBusinessInfo } from './Step3PersonalBusinessInfo';
-import { Step4BusinessDetails } from './Step4BusinessDetails';
+import { X } from 'lucide-react';
 
 interface ConfirmationDialogProps {
   isOpen: boolean;
@@ -352,39 +455,6 @@ export const ConfirmationDialog = ({
           </button>
         </div>
       </div>
-    </div>
-  );
-};
-
-// components/registration/StepIndicator.tsx
-interface StepIndicatorProps {
-  currentStep: number;
-  totalSteps: number;
-}
-
-export const StepIndicator = ({ currentStep, totalSteps }: StepIndicatorProps) => {
-  return (
-    <div className="flex items-center justify-center mb-8">
-      {Array.from({ length: totalSteps }, (_, i) => i + 1).map((step) => (
-        <div key={step} className="flex items-center">
-          <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-              step <= currentStep
-                ? 'bg-[#8DEB6E] text-primary'
-                : 'bg-gray-200 text-gray-600'
-            }`}
-          >
-            {step}
-          </div>
-          {step < totalSteps && (
-            <div
-              className={`w-16 h-1 mx-2 ${
-                step < currentStep ? 'bg-primary' : 'bg-gray-200'
-              }`}
-            />
-          )}
-        </div>
-      ))}
     </div>
   );
 };
