@@ -65,6 +65,49 @@ export class RegistrationService {
     }
   }
 
+  // lets do for resend otp
+  async resendOTP(emailAddress: string): Promise<any> {
+    try {
+      const formData = new FormData();
+      formData.append("emailAddress", emailAddress);
+      // API docs use "identifier" for OTP flows; send both for compatibility.
+      formData.append("identifier", emailAddress);
+
+      const url = `${environment.apiBaseUrl}${API_ENDPOINTS.REGISTRATION.RESEND_OTP}`;
+      console.log('📤 Resending OTP request to:', url);
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          'Authorization': environment.basicAuthHeader,
+        },
+        body: formData,
+      });
+
+      console.log('📥 Resend OTP response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        const errorMsg = result.message || result.error || `Server returned ${response.status}: ${response.statusText}`;
+        throw new Error(errorMsg);
+      }
+
+      // Some environments return JSON containing verificationId; return it to caller.
+      const result = await response.json().catch(() => ({}));
+      return result;
+    } catch (error) {
+      console.error("Resend OTP error:", error);
+      
+      // Provide more specific error messages for common issues
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        throw new Error("Network error: Unable to connect to the server. Please check your internet connection or contact support if the problem persists.");
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : "Failed to resend OTP";
+      throw new Error(errorMessage);
+    }
+  }
+
   /**
    * Verify OTP code
    */

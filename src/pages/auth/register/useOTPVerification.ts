@@ -35,6 +35,30 @@ export const useOTPVerification = (email: string) => {
     }
   };
 
+  const resendOTP = async () => {
+    setIsSendingOtp(true);
+    setOtpError(null);
+    setOtpCode('');
+    setIsOtpVerified(false);
+
+    try {
+      const result = await registrationService.resendOTP(email);
+      const verificationId = result?.verificationId || 
+                            result?.data?.verificationId || 
+                            result?.verification_id || 
+                            null;
+      setOtpVerificationId(verificationId);
+      popup.success('Verification code resent to your email!');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to resend verification code';
+      setOtpError(errorMessage);
+      popup.error(errorMessage);
+      throw error;
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
   const verifyOTP = async () => {
     if (!otpCode.trim() || otpCode.trim().length !== 5) {
       setOtpError('Please enter a valid 5-digit verification code');
@@ -84,6 +108,7 @@ export const useOTPVerification = (email: string) => {
     setOtpError,
     sendOTP,
     verifyOTP,
+    resendOTP,
     resetOTP,
   };
 };

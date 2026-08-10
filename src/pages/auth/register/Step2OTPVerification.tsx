@@ -11,7 +11,7 @@ interface Step2OTPVerificationProps {
 export const Step2OTPVerification = ({ email, onVerified, otp }: Step2OTPVerificationProps) => {
   const {
     otpCode, setOtpCode, isOtpVerified, isSendingOtp, isVerifyingOtp,
-    otpError, setOtpError, sendOTP, verifyOTP,
+    otpError, setOtpError,  verifyOTP, resendOTP
   } = otp;
 
   const handleVerify = async () => {
@@ -112,7 +112,7 @@ export const Step2OTPVerification = ({ email, onVerified, otp }: Step2OTPVerific
           Didn't receive the email?{' '}
           <button
             type="button"
-            onClick={sendOTP}
+            onClick={resendOTP}
             disabled={isSendingOtp}
             className="text-[#1E4700] hover:text-[#1E4700]/80 font-medium focus:outline-none disabled:opacity-50"
           >

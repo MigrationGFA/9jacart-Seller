@@ -10,6 +10,7 @@ export const API_ENDPOINTS = {
   REGISTRATION: {
     SIGNUP: "/vendor/signup", // Single endpoint for complete registration
     SEND_OTP: "/vendor/send-otp",
+    RESEND_OTP: "/vendor/resend-otp",
     VERIFY_OTP: "/vendor/verify-otp",
   },
   VENDOR: {
