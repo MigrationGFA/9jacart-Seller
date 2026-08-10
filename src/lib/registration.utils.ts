@@ -192,8 +192,8 @@ export const registrationSchema = z.object({
     .regex(/^[0-9-]+$/, 'Tax ID can only include digits and hyphens')
     .refine((val) => {
       const digitsOnly = val.replace(/-/g, '');
-      return digitsOnly.length === 10 || digitsOnly.length === 14;
-    }, 'Tax ID must contain exactly 10 or 14 digits'),
+      return digitsOnly.length >= 10 && digitsOnly.length <= 14;
+    }, 'Tax ID must contain between 10 and 14 digits'),
   businessRegNumber: z.string()
     .optional()
     .refine(

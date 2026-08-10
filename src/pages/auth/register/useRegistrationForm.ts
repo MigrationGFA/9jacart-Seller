@@ -7,7 +7,7 @@ import { useBusinessCategories } from '@/hooks/useBusinessCategories';
 import { registrationSchema, type RegistrationFormData } from '@/lib/registration.utils';
 
 export const useRegistrationForm = () => {
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(4);
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const navigate = useNavigate();
