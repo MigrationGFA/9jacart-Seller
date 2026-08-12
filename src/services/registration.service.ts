@@ -176,7 +176,7 @@ export class RegistrationService {
         }
       );
 
-      console.log(response,"response")
+      console.log(formData,"formData")
 
       let result: any = {};
       try {

@@ -71,6 +71,8 @@ export default function RegisterPage() {
           setIsLoading(false);
           return;
         }
+
+        await otp.sendOTP();
         setCurrentStep(2);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to send verification code';

@@ -22,12 +22,12 @@ const PAYMENT_OPTIONS: {
 //     description: 'Pay the registration fee in cash to the 9jacart team.',
 //     icon: Banknote,
 //   },
-  {
-    value: 'Not Paid',
-    label: 'Pay later',
-    description: 'Continue without paying now. Payment can be completed later.',
-    icon: CircleSlash,
-  },
+  // {
+  //   value: 'Not Paid',
+  //   label: 'Pay later',
+  //   description: 'Continue without paying now. Payment can be completed later.',
+  //   icon: CircleSlash,
+  // },
 ];
 
 const formattedRegistrationFee = new Intl.NumberFormat('en-NG', {
