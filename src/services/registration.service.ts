@@ -176,6 +176,8 @@ export class RegistrationService {
         }
       );
 
+      console.log(response,"response")
+
       let result: any = {};
       try {
         result = await response.json();
