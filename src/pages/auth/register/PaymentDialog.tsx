@@ -1,5 +1,5 @@
 // components/registration/PaymentDialog.tsx
-import { X, CreditCard,  CircleSlash } from 'lucide-react';
+import { X, CreditCard } from 'lucide-react';
 import { LoadingButton } from '@/components/ui/LoadingSpinner';
 import { VENDOR_REGISTRATION_FEE_NAIRA } from '@/lib/constants';
 import type { VendorRegistrationPaymentMethod } from '@/types';
