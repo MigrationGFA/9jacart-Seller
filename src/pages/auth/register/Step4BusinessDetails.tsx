@@ -119,7 +119,7 @@ export const Step4BusinessDetails = ({
           htmlFor="taxIdNumber"
           className="block text-sm font-medium text-gray-700 mb-2"
         >
-          Tax Identification Number <span className="text-red-500">*</span>
+          Tax Identification Number 
         </label>
         <input
           id="taxIdNumber"
@@ -172,7 +172,7 @@ export const Step4BusinessDetails = ({
         file={idDocument as File | null}
         onFileChange={(file) => setValue("idDocument", file)}
         accept="image/*,.pdf"
-        required
+        // required
         formError={errors.idDocument?.message}
       />
 
@@ -181,7 +181,7 @@ export const Step4BusinessDetails = ({
         file={businessRegCertificate as File | null}
         onFileChange={(file) => setValue("businessRegCertificate", file)}
         accept="image/*,.pdf"
-        required
+        // required
         formError={errors.businessRegCertificate?.message}
       />
     </div>
