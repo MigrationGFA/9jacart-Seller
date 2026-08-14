@@ -275,7 +275,7 @@ export default function RegisterPage() {
             <LoadingButton
               type="submit"
               isLoading={isLoading}
-              disabled={!watch('idDocument') || !watch('businessRegCertificate')}
+              // disabled={!watch('idDocument') || !watch('businessRegCertificate')}
               className="flex-1 py-3 px-4 bg-[#8DEB6E] hover:bg-[#8DEB6E]/90 disabled:bg-gray-300 disabled:cursor-not-allowed text-primary font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
             >
               {isLoading ? "Submitting..." : "Complete Registration"}
