@@ -202,8 +202,8 @@ export const registrationSchema = z.object({
       (val) => !val || /^RC-?\d{7}$/i.test(val),
       'Use RC1234567 or RC-1234567 (7 digits after RC)'
     ),
-  // idDocument: z.instanceof(File, { message: 'ID document is required' }),
-  // businessRegCertificate: z.instanceof(File, { message: 'Business registration certificate is required' }),
+  idDocument: z.instanceof(File, { message: 'ID document is required' }).optional(),
+  businessRegCertificate: z.instanceof(File, { message: 'Business registration certificate is required' }).optional(),
 });
 
 export type RegistrationFormData = z.infer<typeof registrationSchema>;
