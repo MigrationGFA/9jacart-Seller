@@ -97,7 +97,7 @@ export default function RegisterPage() {
     if (!(await validateStep(3)) || !(await validateStep(4))) {
       return;
     }
-
+    console.log("here")
     // Phone uniqueness must be checked before showing the account confirmation modal.
     setIsLoading(true);
     try {

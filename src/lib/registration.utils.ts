@@ -187,21 +187,23 @@ export const registrationSchema = z.object({
   // Step 4: Business Details & Documents
   storeName: z.string().min(1, 'Store name is required'),
   businessAddress: z.string().min(1, 'Business address is required'),
-  taxIdNumber: z.string()
-    .min(1, 'Tax ID is required')
-    .regex(/^[0-9-]+$/, 'Tax ID can only include digits and hyphens')
+  taxIdNumber: z.string().optional()
+    // optional: if provided (non-empty), enforce digits/hyphens and length
     .refine((val) => {
+      if (!val) return true; // not provided -> valid
+      // allow only digits and hyphens
+      if (!/^[0-9-]+$/.test(val)) return false;
       const digitsOnly = val.replace(/-/g, '');
       return digitsOnly.length >= 10 && digitsOnly.length <= 14;
-    }, 'Tax ID must contain between 10 and 14 digits'),
+    }, 'Tax ID must contain only digits and hyphens, and between 10 and 14 digits'),
   businessRegNumber: z.string()
     .optional()
     .refine(
       (val) => !val || /^RC-?\d{7}$/i.test(val),
       'Use RC1234567 or RC-1234567 (7 digits after RC)'
     ),
-  idDocument: z.instanceof(File, { message: 'ID document is required' }),
-  businessRegCertificate: z.instanceof(File, { message: 'Business registration certificate is required' }),
+  // idDocument: z.instanceof(File, { message: 'ID document is required' }),
+  // businessRegCertificate: z.instanceof(File, { message: 'Business registration certificate is required' }),
 });
 
 export type RegistrationFormData = z.infer<typeof registrationSchema>;
